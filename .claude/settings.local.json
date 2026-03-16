@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const l = require\\(''lucide-react''\\); console.log\\(''Repeat2:'', !!l.Repeat2, ''Library:'', !!l.Library, ''Loader2:'', !!l.Loader2\\)\")",
+      "Bash(node -e \"const l = require\\(''lucide-react''\\); const keys = [''Repeat2'',''Library'',''Loader2'',''Bookmark'',''MoreHorizontal'',''Send'']; keys.forEach\\(k => console.log\\(k, l[k] ? ''ok'' : ''MISSING''\\)\\)\")",
+      "Bash(npx tsc:*)",
+      "Bash(curl -s -X POST -H \"Authorization: token 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\" -H \"Content-Type: application/json\" -d '{\"\"\"\"name\"\"\"\":\"\"\"\"social-scheduler\"\"\"\",\"\"\"\"private\"\"\"\":true,\"\"\"\"description\"\"\"\":\"\"\"\"Social media scheduling app for content creators\"\"\"\"}' https://api.github.com/user/repos)",
+      "Bash(curl -s -H \"Authorization: token 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\" https://api.github.com/repos/cozy-afk/social-scheduler)",
+      "Bash(curl -s -X PATCH -H \"Authorization: token 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\" -H \"Content-Type: application/json\" -d '{\"\"\"\"private\"\"\"\":true}' https://api.github.com/repos/cozy-afk/social-scheduler)"
+    ]
+  }
+}
