@@ -12,7 +12,7 @@ import AutoPublisher from '@/components/AutoPublisher';
 import FeedPreviewPanel from '@/components/FeedPreviewPanel';
 import { GalleryAsset, CropRatio } from '@/types/models';
 import { calculateViralityScore, type ViralityAnalysis } from '@/lib/virality-analyzer';
-import { getCachedAssets, setCachedAssets, fetchGalleryAssets } from '@/lib/gallery-cache';
+import { getCachedAssets, setCachedAssets, touchCachedAssets, fetchGalleryAssets } from '@/lib/gallery-cache';
 import {
   Upload, Check, X, Film, Image as ImageIcon,
   HardDrive, Search, FolderOpen,
@@ -297,9 +297,12 @@ export default function GalleryPage() {
   useEffect(() => {
     if (!selectedModel?.s3Folder) return;
 
+    let cancelled = false;
+
     setSelectedIds(new Set());
     clearApprovals();
     setR2Error(null);
+    setR2Refreshing(false); // clear any in-flight refresh indicator from previous model
 
     const cached = getCachedAssets(selectedModel.id);
 
@@ -312,13 +315,16 @@ export default function GalleryPage() {
         setR2Refreshing(true);
         fetchGalleryAssets(selectedModel.s3Folder, cached.etag)
           .then(({ assets, etag, notModified }) => {
+            if (cancelled) return;
             if (!notModified) {
               setCachedAssets(selectedModel.id, assets, etag);
               setGalleryAssets(assets);
+            } else {
+              touchCachedAssets(selectedModel.id); // 304 — confirmed fresh, reset stale timer
             }
           })
           .catch(() => {})
-          .finally(() => setR2Refreshing(false));
+          .finally(() => { if (!cancelled) setR2Refreshing(false); });
       }
     } else {
       // Cache miss — full load with spinner
@@ -326,12 +332,15 @@ export default function GalleryPage() {
       setR2Loading(true);
       fetchGalleryAssets(selectedModel.s3Folder, null)
         .then(({ assets, etag }) => {
+          if (cancelled) return;
           setCachedAssets(selectedModel.id, assets, etag);
           setGalleryAssets(assets);
         })
-        .catch((err) => setR2Error(err instanceof Error ? err.message : 'Unknown error'))
-        .finally(() => setR2Loading(false));
+        .catch((err) => { if (!cancelled) setR2Error(err instanceof Error ? err.message : 'Unknown error'); })
+        .finally(() => { if (!cancelled) setR2Loading(false); });
     }
+
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedModel?.id]);
 

@@ -40,6 +40,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'modelFolder is required' }, { status: 400 });
   }
 
+  // Validate R2_PUBLIC_BASE_URL is configured before allowing presign=false
+  if (!presign && !process.env.R2_PUBLIC_BASE_URL) {
+    return NextResponse.json(
+      { ok: false, error: 'R2_PUBLIC_BASE_URL must be set to use presign=false' },
+      { status: 500 }
+    );
+  }
+
   // Sanitize: only allow alphanumeric, hyphens, underscores — prevent path traversal
   const safeFolder = modelFolder.replace(/[^a-zA-Z0-9_\-]/g, '');
   if (!safeFolder) {
@@ -78,7 +86,11 @@ export async function GET(req: NextRequest) {
         const fileType = fileTypeOf(obj.key)!;
         const parts = obj.key.split('/');
         const fileName = parts[parts.length - 1];
-        const uuid = parts[parts.length - 2];
+        // UUID is the directory immediately containing the file.
+        // For flat uploads (no UUID subdir), fall back to a hash of the full key to avoid duplicate IDs.
+        const uuid = parts.length >= 3
+          ? parts[parts.length - 2]
+          : createHash('sha1').update(obj.key).digest('hex').slice(0, 16);
 
         const fileUrl = presign
           ? await getPresignedUrl(obj.key, 3600)

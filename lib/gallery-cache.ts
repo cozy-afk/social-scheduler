@@ -52,6 +52,12 @@ export function invalidateCache(modelId: string) {
   cache.delete(modelId);
 }
 
+/** Bump fetchedAt without changing assets — called when a 304 confirms data is still current. */
+export function touchCachedAssets(modelId: string) {
+  const entry = cache.get(modelId);
+  if (entry) cache.set(modelId, { ...entry, fetchedAt: Date.now() });
+}
+
 export async function fetchGalleryAssets(
   s3Folder: string,
   etag: string | null = null,
@@ -84,6 +90,7 @@ export function prefetchGalleryAssets(s3Folder: string, modelId: string): void {
   const promise = fetchGalleryAssets(s3Folder, cached?.etag ?? null)
     .then(({ assets, etag, notModified }) => {
       if (!notModified) setCachedAssets(modelId, assets, etag);
+      else touchCachedAssets(modelId); // 304 — data confirmed current, reset stale timer
     })
     .catch(() => { /* silent — prefetch is best-effort */ })
     .finally(() => inFlight.delete(modelId));
