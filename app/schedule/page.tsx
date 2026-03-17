@@ -19,6 +19,7 @@ import {
 import { PLATFORM_THEMES } from '@/lib/constants/platform';
 import type { PostType } from '@/types/models';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, FanvueIcon } from '@/components/PlatformIcons';
+import FeedPreviewPanel from '@/components/FeedPreviewPanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -801,6 +802,7 @@ export default function SchedulePage() {
   const [activePlatform, setActivePlatform] = useState<Platform>('instagram');
   const [calMonth, setCalMonth] = useState(new Date());
   const [selectedCalDate, setSelectedCalDate] = useState<Date | null>(null);
+  const [showFeedPreview, setShowFeedPreview] = useState(false);
 
   // IG media fetched from Graph API
   const [igMedia, setIgMedia] = useState<IGMediaItem[]>([]);
@@ -898,6 +900,17 @@ export default function SchedulePage() {
               {approvedAssets.length} approved
             </span>
           )}
+          <button
+            onClick={() => setShowFeedPreview(!showFeedPreview)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all ${
+              showFeedPreview
+                ? 'bg-violet-600 border-violet-500 text-white'
+                : 'btn-secondary'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5" />
+            {showFeedPreview ? 'Hide' : 'Preview'}
+          </button>
           <Link href="/gallery" className="btn-secondary text-xs flex items-center gap-1.5">
             <CalendarDays className="w-3.5 h-3.5" />
             Gallery
@@ -1006,80 +1019,90 @@ export default function SchedulePage() {
           </div>
         </div>
 
-        {/* RIGHT */}
-        <aside className="flex-shrink-0 flex flex-col overflow-hidden rounded-xl"
-          style={{ width: 268, background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
-          <div className="px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <p className="text-xs font-bold text-white flex items-center gap-2">
-              <TrendingUp className="w-3.5 h-3.5 text-violet-400" />
-              Schedule Overview
-            </p>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 no-scrollbar space-y-5">
-            <MiniCalendar
-              month={calMonth}
-              posts={modelPosts}
-              onPrev={() => setCalMonth((m) => subMonths(m, 1))}
-              onNext={() => setCalMonth((m) => addMonths(m, 1))}
-              selectedDate={selectedCalDate}
-              onSelectDate={setSelectedCalDate}
-            />
-
-            {selectedCalDate && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
-                  {format(selectedCalDate, 'MMM d')} · {selectedDayPosts.length} post{selectedDayPosts.length !== 1 ? 's' : ''}
-                </p>
-                {selectedDayPosts.length === 0 ? (
-                  <p className="text-[11px] text-zinc-600">No posts scheduled</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {selectedDayPosts.map((p) => (
-                      <div key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                        <span className="text-sm">
-                          {p.platform === 'instagram' && <InstagramIcon size={14} />}
-                          {p.platform === 'tiktok' && <TikTokIcon size={14} />}
-                          {p.platform === 'x' && <XIcon size={14} />}
-                          {p.platform === 'threads' && <ThreadsIcon size={14} />}
-                          {p.platform === 'fanvue' && <FanvueIcon size={14} />}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[10px] font-semibold text-white truncate">{PLATFORM_THEMES[p.platform].label}</p>
-                          <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                            {format(parseISO(p.scheduledTime), 'h:mm a')} · {REEL_TYPES.has(p.postType) ? 'Reel' : STORY_TYPES.has(p.postType) ? 'Story' : 'Post'}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Quota */}
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>
-                Monthly Quotas · {format(new Date(), 'MMM')}
+        {/* RIGHT - Feed Preview or Schedule Overview */}
+        {showFeedPreview && selectedModelId ? (
+          <FeedPreviewPanel
+            modelId={selectedModelId}
+            modelName={selectedModel?.name || ''}
+            selectedAssets={approvedAssets}
+            isOpen={showFeedPreview}
+            onToggle={() => setShowFeedPreview(false)}
+          />
+        ) : (
+          <aside className="flex-shrink-0 flex flex-col overflow-hidden rounded-xl"
+            style={{ width: 268, background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <p className="text-xs font-bold text-white flex items-center gap-2">
+                <TrendingUp className="w-3.5 h-3.5 text-violet-400" />
+                Schedule Overview
               </p>
-              {quotas.map(({ platform, entries }) => (
-                <div key={platform} className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm">
-                      {platform === 'instagram' && <InstagramIcon size={14} />}
-                      {platform === 'tiktok' && <TikTokIcon size={14} />}
-                      {platform === 'x' && <XIcon size={14} />}
-                      {platform === 'threads' && <ThreadsIcon size={14} />}
-                      {platform === 'fanvue' && <FanvueIcon size={14} />}
-                    </span>
-                    <p className="text-[11px] font-bold text-white">{PLATFORM_THEMES[platform].label}</p>
-                  </div>
-                  {entries.map((e) => <QuotaBar key={e.label} {...e} />)}
-                </div>
-              ))}
             </div>
-          </div>
-        </aside>
+
+            <div className="flex-1 overflow-y-auto p-4 no-scrollbar space-y-5">
+              <MiniCalendar
+                month={calMonth}
+                posts={modelPosts}
+                onPrev={() => setCalMonth((m) => subMonths(m, 1))}
+                onNext={() => setCalMonth((m) => addMonths(m, 1))}
+                selectedDate={selectedCalDate}
+                onSelectDate={setSelectedCalDate}
+              />
+
+              {selectedCalDate && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                    {format(selectedCalDate, 'MMM d')} · {selectedDayPosts.length} post{selectedDayPosts.length !== 1 ? 's' : ''}
+                  </p>
+                  {selectedDayPosts.length === 0 ? (
+                    <p className="text-[11px] text-zinc-600">No posts scheduled</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {selectedDayPosts.map((p) => (
+                        <div key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                          <span className="text-sm">
+                            {p.platform === 'instagram' && <InstagramIcon size={14} />}
+                            {p.platform === 'tiktok' && <TikTokIcon size={14} />}
+                            {p.platform === 'x' && <XIcon size={14} />}
+                            {p.platform === 'threads' && <ThreadsIcon size={14} />}
+                            {p.platform === 'fanvue' && <FanvueIcon size={14} />}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-semibold text-white truncate">{PLATFORM_THEMES[p.platform].label}</p>
+                            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                              {format(parseISO(p.scheduledTime), 'h:mm a')} · {REEL_TYPES.has(p.postType) ? 'Reel' : STORY_TYPES.has(p.postType) ? 'Story' : 'Post'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Quota */}
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>
+                  Monthly Quotas · {format(new Date(), 'MMM')}
+                </p>
+                {quotas.map(({ platform, entries }) => (
+                  <div key={platform} className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm">
+                        {platform === 'instagram' && <InstagramIcon size={14} />}
+                        {platform === 'tiktok' && <TikTokIcon size={14} />}
+                        {platform === 'x' && <XIcon size={14} />}
+                        {platform === 'threads' && <ThreadsIcon size={14} />}
+                        {platform === 'fanvue' && <FanvueIcon size={14} />}
+                      </span>
+                      <p className="text-[11px] font-bold text-white">{PLATFORM_THEMES[platform].label}</p>
+                    </div>
+                    {entries.map((e) => <QuotaBar key={e.label} {...e} />)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

@@ -6,8 +6,10 @@ import { useStore, getVisibleModels } from '@/lib/store';
 import {
   LayoutGrid, Calendar, FileText, Users, BarChart2,
   TrendingUp, Settings, Zap, ChevronDown, CalendarCheck, Copy,
+  Trophy, Film, Layers, BookImage,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { format } from 'date-fns';
 
 const NAV_ITEMS = [
   { href: '/gallery', icon: LayoutGrid, label: 'Gallery' },
@@ -20,6 +22,95 @@ const NAV_ITEMS = [
   { href: '/research', icon: TrendingUp, label: 'Research' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ];
+
+// ─── Daily Progress Widget ────────────────────────────────────────────────────
+
+function DailyProgressWidget() {
+  const { selectedModelId, posts } = useStore();
+  const models = useStore(getVisibleModels);
+  const selectedModel = models.find((m) => m.id === selectedModelId);
+  const target = selectedModel?.dailyTarget;
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+  const counts = useMemo(() => {
+    const modelPosts = posts.filter(
+      (p) => p.modelId === selectedModelId && p.status === 'completed' && p.scheduledTime.startsWith(todayStr)
+    );
+    let reels = 0, carousels = 0, stories = 0;
+    for (const p of modelPosts) {
+      if (p.postType.includes('reel')) reels++;
+      else if (p.postType.includes('story')) stories++;
+      else carousels++;
+    }
+    return { reels, carousels, stories };
+  }, [posts, selectedModelId, todayStr]);
+
+  if (!target) return null;
+
+  const total = target.reels + target.carousels + target.stories;
+  const done = Math.min(counts.reels, target.reels)
+    + Math.min(counts.carousels, target.carousels)
+    + Math.min(counts.stories, target.stories);
+  const allDone = done >= total && total > 0;
+
+  const rows: { icon: React.ReactNode; label: string; done: number; goal: number; color: string; bg: string }[] = [
+    { icon: <Film className="w-3 h-3" />, label: 'Reels', done: counts.reels, goal: target.reels, color: '#A855F7', bg: 'rgba(168,85,247,0.15)' },
+    { icon: <Layers className="w-3 h-3" />, label: 'Carousels', done: counts.carousels, goal: target.carousels, color: '#F59E0B', bg: 'rgba(245,158,11,0.15)' },
+    { icon: <BookImage className="w-3 h-3" />, label: 'Stories', done: counts.stories, goal: target.stories, color: '#EC4899', bg: 'rgba(236,72,153,0.15)' },
+  ];
+
+  return (
+    <div className="px-3 py-3 border-t border-white/5 flex-shrink-0">
+      <div className="rounded-xl p-3 space-y-2.5"
+        style={{ background: allDone ? 'rgba(124,58,237,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${allDone ? 'rgba(124,58,237,0.35)' : 'rgba(255,255,255,0.06)'}` }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Today&apos;s Targets</p>
+          {allDone && (
+            <div className="flex items-center gap-1 text-[10px] font-bold text-amber-400">
+              <Trophy className="w-3 h-3" />
+              Done!
+            </div>
+          )}
+        </div>
+
+        {/* Progress rows */}
+        {rows.map((row) => {
+          const pct = row.goal === 0 ? 100 : Math.min(100, (row.done / row.goal) * 100);
+          const met = row.done >= row.goal;
+          return (
+            <div key={row.label} className="space-y-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5" style={{ color: row.color }}>
+                  {row.icon}
+                  <span className="text-[10px] font-medium">{row.label}</span>
+                </div>
+                <span className={`text-[10px] font-bold tabular-nums ${met ? 'text-green-400' : 'text-zinc-400'}`}>
+                  {row.done}/{row.goal}
+                </span>
+              </div>
+              <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${pct}%`, background: met ? '#22C55E' : row.color, opacity: met ? 1 : 0.8 }}
+                />
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Celebration message */}
+        {allDone && (
+          <p className="text-[10px] text-center text-violet-300 font-medium pt-0.5">
+            All targets met — great work!
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -102,6 +193,9 @@ export default function Sidebar() {
           })}
         </div>
       </nav>
+
+      {/* Daily Progress */}
+      <DailyProgressWidget />
 
       {/* User info */}
       <div className="px-3 py-3 border-t border-white/5 flex-shrink-0">

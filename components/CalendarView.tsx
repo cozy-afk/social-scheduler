@@ -9,7 +9,7 @@ import {
 import { ChevronLeft, ChevronRight, Plus, Eye, Film, Image as ImageIcon, Layers } from 'lucide-react';
 import { Post, Model, Platform, PostType } from '@/types/models';
 import clsx from 'clsx';
-import FeedPreviewModal from './FeedPreviewModal';
+import FeedPreviewPanel from './FeedPreviewPanel';
 import { PLATFORM_THEMES, POST_TYPE_CONFIGS } from '@/lib/constants/platform';
 import { isRealUrl, calculateTodayStats, getDayPosts } from '@/lib/utils/posts';
 import { navigateDate, formatViewTitle, getWeekDays, WEEKDAYS } from '@/lib/utils/date';
@@ -570,29 +570,31 @@ export default function CalendarView() {
   }
 
   return (
-    <div className="space-y-5">
-      {/* ── Page header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="page-title">Calendar</h1>
-          <p className="page-subtitle">
-            Today: <span style={{ color: '#A855F7' }}>{todayStats.scheduled}</span> scheduled
-            {todayStats.missing > 0 && (
-              <span className="ml-2" style={{ color: 'var(--text-muted)' }}>· {todayStats.missing} empty slots</span>
-            )}
-          </p>
+    <div className={`flex gap-6 ${showFeedPreview ? 'flex-row' : 'flex-col'}`}>
+      {/* Main content */}
+      <div className="flex-1 space-y-5 min-w-0">
+        {/* ── Page header ── */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="page-title">Calendar</h1>
+            <p className="page-subtitle">
+              Today: <span style={{ color: '#A855F7' }}>{todayStats.scheduled}</span> scheduled
+              {todayStats.missing > 0 && (
+                <span className="ml-2" style={{ color: 'var(--text-muted)' }}>· {todayStats.missing} empty slots</span>
+              )}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowFeedPreview(!showFeedPreview)} className="btn-secondary text-sm">
+              <Eye className="w-4 h-4" />
+              {showFeedPreview ? 'Hide' : 'Preview'} Feed
+            </button>
+            <button onClick={handleCreatePost} className="btn-primary text-sm">
+              <Plus className="w-4 h-4" />
+              New Post
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowFeedPreview(true)} className="btn-secondary text-sm">
-            <Eye className="w-4 h-4" />
-            Preview Feed
-          </button>
-          <button onClick={handleCreatePost} className="btn-primary text-sm">
-            <Plus className="w-4 h-4" />
-            New Post
-          </button>
-        </div>
-      </div>
 
       {/* ── Toolbar ── */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -642,20 +644,23 @@ export default function CalendarView() {
         </div>
       </div>
 
-      {/* ── Calendar views ── */}
-      {view === 'day'   && <DayView   date={currentDate} model={selectedModel} posts={filteredPosts} onCreatePost={handleCreatePost} onEditPost={handleEditPost} />}
-      {view === 'week'  && <WeekView  weekStart={weekStart} model={selectedModel} posts={filteredPosts} onCreatePost={handleCreatePost} onEditPost={handleEditPost} onDayClick={handleDayClick} />}
-      {view === 'month' && <MonthView month={currentDate} model={selectedModel} posts={filteredPosts} onDayClick={handleDayClick} />}
+        {/* ── Calendar views ── */}
+        {view === 'day'   && <DayView   date={currentDate} model={selectedModel} posts={filteredPosts} onCreatePost={handleCreatePost} onEditPost={handleEditPost} />}
+        {view === 'week'  && <WeekView  weekStart={weekStart} model={selectedModel} posts={filteredPosts} onCreatePost={handleCreatePost} onEditPost={handleEditPost} onDayClick={handleDayClick} />}
+        {view === 'month' && <MonthView month={currentDate} model={selectedModel} posts={filteredPosts} onDayClick={handleDayClick} />}
 
-      {/* ── Legend ── */}
-      <ContentLegend />
+        {/* ── Legend ── */}
+        <ContentLegend />
+      </div>
 
-      {showFeedPreview && (
-        <FeedPreviewModal
+      {/* Feed Preview Side Panel */}
+      {showFeedPreview && selectedModel && (
+        <FeedPreviewPanel
           modelId={selectedModel.id}
           modelName={selectedModel.name}
           scheduledPosts={posts.filter((p) => p.modelId === selectedModel.id)}
-          onClose={() => setShowFeedPreview(false)}
+          isOpen={showFeedPreview}
+          onToggle={() => setShowFeedPreview(false)}
         />
       )}
     </div>

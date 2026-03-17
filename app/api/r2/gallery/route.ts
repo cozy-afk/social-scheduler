@@ -65,6 +65,7 @@ export async function GET(req: NextRequest) {
         // Store folder as a tag so UI can group/filter by it
         // We reuse the thumbnailUrl slot for the folder name (used as category tag)
         thumbnailUrl: fileType === 'video' ? undefined : fileUrl,
+        // Store folder name as metadata for filtering
       });
     }
 

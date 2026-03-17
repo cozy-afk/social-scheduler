@@ -49,6 +49,12 @@ export interface PostingFrequencyConfig {
   postTypes: PostType[];        // cycling order
 }
 
+export interface DailyPostingTarget {
+  reels: number;      // total reels per day (all platforms combined)
+  carousels: number;  // total carousels/posts per day
+  stories: number;    // total stories per day
+}
+
 export interface MetaConnection {
   instagramAccountId?: string;
   accessToken?: string;
@@ -81,6 +87,7 @@ export interface Model {
   };
   postingSchedule: TimeSlot[];
   postingFrequency: PostingFrequencyConfig[];
+  dailyTarget: DailyPostingTarget;
   assignedVaIds: string[];      // which VA user IDs can access this model
   status: 'active' | 'paused';
   timezone?: string;            // IANA timezone, e.g. 'Europe/London', 'America/New_York'
@@ -181,6 +188,9 @@ export interface GalleryAsset {
   source: 's3' | 'local';
   s3Key?: string;
   favorite?: boolean;
+  viralityScore?: number; // 0-100 score for image viral potential
+  variantOf?: string; // ID of original asset if this is a variant
+  variantLabel?: string; // Label for the variant (e.g., "with captions")
 }
 
 // ─── Post References ─────────────────────────────────────────────────────────

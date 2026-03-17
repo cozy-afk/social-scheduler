@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useStore } from '@/lib/store';
 import { mockModels, mockAdmin, mockVAUsers, mockPosts, mockCaptions } from '@/lib/mockData';
 import { createVAMagicLink, getVAMagicLinkURL } from '@/lib/magic-links';
-import { Model, User, TimeSlot, Platform, PostType, PostingFrequencyConfig } from '@/types/models';
+import { Model, User, TimeSlot, Platform, PostType, PostingFrequencyConfig, DailyPostingTarget } from '@/types/models';
 import {
   Boxes, Users, Shield,
   Check, X, Plus, Edit2, Trash2,
@@ -69,6 +69,43 @@ const DEFAULT_EXIF_PRESET = {
 
 type TabId = 'models' | 'team' | 'access';
 
+// ─── Posting frequency stepper ────────────────────────────────────────────────
+
+function CountStepper({
+  label,
+  value,
+  onChange,
+  color,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  color: string;
+}) {
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-slate-700/60 last:border-0">
+      <span className="text-sm text-slate-200">{label}</span>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(0, value - 1))}
+          className="w-7 h-7 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 flex items-center justify-center text-lg font-bold transition-colors"
+        >
+          −
+        </button>
+        <span className={`w-8 text-center text-base font-bold ${color}`}>{value}</span>
+        <button
+          type="button"
+          onClick={() => onChange(Math.min(20, value + 1))}
+          className="w-7 h-7 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 flex items-center justify-center text-lg font-bold transition-colors"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
 interface Tab {
@@ -90,11 +127,14 @@ function ModelFormModal({
   onSave: (data: Partial<Model> & { name: string }) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<'general' | 'schedule'>('general');
+  const [tab, setTab] = useState<'general' | 'frequency' | 'schedule'>('general');
   const [name, setName] = useState(model?.name || '');
   const [emoji, setEmoji] = useState(model?.profileImage || '👩');
   const [status, setStatus] = useState<'active' | 'paused'>(model?.status || 'active');
   const [schedule, setSchedule] = useState<TimeSlot[]>(model?.postingSchedule || []);
+  const [dailyTarget, setDailyTarget] = useState<DailyPostingTarget>(
+    model?.dailyTarget ?? { reels: 3, carousels: 1, stories: 2 }
+  );
 
   const [slotTime, setSlotTime] = useState('09:00');
   const [slotPlatform, setSlotPlatform] = useState<Platform>('instagram');
@@ -118,7 +158,7 @@ function ModelFormModal({
 
   const handleSubmit = () => {
     if (!name.trim()) return;
-    onSave({ name, profileImage: emoji, status, postingSchedule: schedule });
+    onSave({ name, profileImage: emoji, status, postingSchedule: schedule, dailyTarget });
   };
 
   return (
@@ -137,7 +177,7 @@ function ModelFormModal({
 
         {/* Tabs */}
         <div className="flex border-b border-slate-700">
-          {(['general', 'schedule'] as const).map((t) => (
+          {(['general', 'frequency', 'schedule'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -203,6 +243,38 @@ function ModelFormModal({
                   )}
                 </button>
               </div>
+            </div>
+          )}
+
+          {tab === 'frequency' && (
+            <div className="space-y-2">
+              <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                Set the daily posting targets for this model. The manager dashboard will track progress
+                and reward meeting all targets.
+              </p>
+              <div className="card-surface rounded-xl px-4">
+                <CountStepper
+                  label="Reels per day"
+                  value={dailyTarget.reels}
+                  onChange={(v) => setDailyTarget((prev) => ({ ...prev, reels: v }))}
+                  color="text-violet-400"
+                />
+                <CountStepper
+                  label="Carousels / Posts per day"
+                  value={dailyTarget.carousels}
+                  onChange={(v) => setDailyTarget((prev) => ({ ...prev, carousels: v }))}
+                  color="text-amber-400"
+                />
+                <CountStepper
+                  label="Stories per day"
+                  value={dailyTarget.stories}
+                  onChange={(v) => setDailyTarget((prev) => ({ ...prev, stories: v }))}
+                  color="text-pink-400"
+                />
+              </div>
+              <p className="text-xs text-slate-500 pt-1 text-center">
+                Total: {dailyTarget.reels + dailyTarget.carousels + dailyTarget.stories} posts/day
+              </p>
             </div>
           )}
 
@@ -506,6 +578,7 @@ function ModelsTab() {
         exifPreset: DEFAULT_EXIF_PRESET,
         postingSchedule: data.postingSchedule || [],
         postingFrequency: DEFAULT_POSTING_FREQUENCY,
+        dailyTarget: data.dailyTarget ?? { reels: 3, carousels: 1, stories: 2 },
         assignedVaIds: [],
         status: data.status || 'active',
         createdAt: new Date().toISOString(),

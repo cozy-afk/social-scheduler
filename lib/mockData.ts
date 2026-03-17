@@ -1,5 +1,7 @@
-import { Model, User, Post, Caption, GalleryAsset, PostingFrequencyConfig } from '@/types/models';
+import { Model, User, Post, Caption, GalleryAsset, PostingFrequencyConfig, DailyPostingTarget } from '@/types/models';
 import { addDays, format } from 'date-fns';
+
+const defaultTarget: DailyPostingTarget = { reels: 3, carousels: 1, stories: 2 };
 
 const defaultFrequency: PostingFrequencyConfig[] = [
   { platform: 'instagram', enabled: true,  postsPerDay: 3, startHour: 8,  endHour: 21, postTypes: ['instagram_reel', 'instagram_post', 'instagram_story'] },
@@ -30,6 +32,7 @@ export const mockModels: Model[] = [
     exifPreset: generateExifPreset(),
     assignedVaIds: ['va-1'],
     postingFrequency: defaultFrequency,
+    dailyTarget: { reels: 4, carousels: 1, stories: 3 },
     postingSchedule: [
       { id: '1',  time: '09:00', platform: 'instagram', postType: 'instagram_post',   recurrence: 'daily' },
       { id: '2',  time: '09:00', platform: 'instagram', postType: 'instagram_reel',   recurrence: 'daily' },
@@ -57,6 +60,7 @@ export const mockModels: Model[] = [
     exifPreset: generateExifPreset(),
     assignedVaIds: ['va-1', 'va-2'],
     postingFrequency: defaultFrequency,
+    dailyTarget: defaultTarget,
     postingSchedule: [
       { id: '13', time: '10:00', platform: 'instagram', postType: 'instagram_post',  recurrence: 'daily' },
       { id: '14', time: '10:00', platform: 'instagram', postType: 'instagram_reel',  recurrence: 'daily' },
@@ -77,6 +81,7 @@ export const mockModels: Model[] = [
     exifPreset: generateExifPreset(),
     assignedVaIds: ['va-2'],
     postingFrequency: defaultFrequency,
+    dailyTarget: defaultTarget,
     postingSchedule: [
       { id: '18', time: '08:00', platform: 'instagram', postType: 'instagram_post',  recurrence: 'daily' },
       { id: '19', time: '12:00', platform: 'tiktok',    postType: 'tiktok_reel',      recurrence: 'daily' },
@@ -95,6 +100,7 @@ export const mockModels: Model[] = [
     exifPreset: generateExifPreset(),
     assignedVaIds: ['va-1'],
     postingFrequency: defaultFrequency,
+    dailyTarget: defaultTarget,
     postingSchedule: [
       { id: '21', time: '10:00', platform: 'instagram', postType: 'instagram_reel',  recurrence: 'daily' },
       { id: '22', time: '15:00', platform: 'tiktok',    postType: 'tiktok_reel',      recurrence: 'daily' },
@@ -112,6 +118,7 @@ export const mockModels: Model[] = [
     exifPreset: generateExifPreset(),
     assignedVaIds: ['va-2'],
     postingFrequency: defaultFrequency,
+    dailyTarget: defaultTarget,
     postingSchedule: [
       { id: '23', time: '11:00', platform: 'instagram', postType: 'instagram_post',  recurrence: 'daily' },
       { id: '24', time: '19:00', platform: 'instagram', postType: 'instagram_reel',  recurrence: 'daily' },
@@ -130,6 +137,7 @@ export const mockModels: Model[] = [
     exifPreset: generateExifPreset(),
     assignedVaIds: [],
     postingFrequency: defaultFrequency,
+    dailyTarget: defaultTarget,
     postingSchedule: [
       { id: '25', time: '11:00', platform: 'instagram', postType: 'instagram_post',  recurrence: 'daily' },
       { id: '26', time: '11:00', platform: 'tiktok',    postType: 'tiktok_reel',      recurrence: 'daily' },
@@ -147,6 +155,7 @@ export const mockModels: Model[] = [
     exifPreset: generateExifPreset(),
     assignedVaIds: [],
     postingFrequency: defaultFrequency,
+    dailyTarget: defaultTarget,
     postingSchedule: [
       { id: '27', time: '14:00', platform: 'instagram', postType: 'instagram_reel',  recurrence: 'daily' },
       { id: '28', time: '16:00', platform: 'threads',   postType: 'threads_post',    recurrence: 'daily' },
