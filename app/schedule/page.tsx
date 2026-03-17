@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useStore } from '@/lib/store';
-import { mockModels, mockAdmin, mockPosts, mockGalleryAssets } from '@/lib/mockData';
+import { mockModels, mockAdmin, mockPosts } from '@/lib/mockData';
 import { GalleryAsset, Post, Platform } from '@/types/models';
 import {
   Film, Heart, MessageCircle, Bookmark, ChevronLeft, ChevronRight,
@@ -782,7 +782,6 @@ export default function SchedulePage() {
     setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
     setPosts(mockPosts);
-    setGalleryAssets(mockGalleryAssets);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useStore, getVisibleModels } from '@/lib/store';
-import { mockGalleryAssets } from '@/lib/mockData';
+
 import { Play, Upload, Film, Check, Clock, X, Copy, Sparkles, HelpCircle } from 'lucide-react';
 
 export default function CloneReelPage() {

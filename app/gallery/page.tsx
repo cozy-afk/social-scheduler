@@ -15,7 +15,7 @@ import { calculateViralityScore, type ViralityAnalysis } from '@/lib/virality-an
 import { getCachedAssets, setCachedAssets, touchCachedAssets, fetchGalleryAssets } from '@/lib/gallery-cache';
 import {
   Upload, Check, X, Film, Image as ImageIcon,
-  HardDrive, Search, FolderOpen,
+  HardDrive, Search, FolderOpen, Users,
   Eye, Loader2, RefreshCw, Heart, MessageCircle, Bookmark,
   Send, Play, Music2, Layers,
   Grid3X3, List, Rows3, CheckCheck, ThumbsUp, CalendarCheck,
@@ -333,10 +333,9 @@ export default function GalleryPage() {
 
   useEffect(() => {
     setModels(mockModels);
-    setSelectedModelId(mockModels[0].id);
+    // Do NOT auto-select a model — user picks from the sidebar dropdown
     setCurrentUser(mockAdmin);
-    // Gallery assets loaded from R2 or local uploads, not mock data
-  }, [setModels, setSelectedModelId, setCurrentUser]);
+  }, [setModels, setCurrentUser]);
 
   const selectedModel = models.find((m) => m.id === selectedModelId);
 
@@ -985,11 +984,25 @@ export default function GalleryPage() {
 
 
             {/* Thumbnail grid / list */}
-            {filtered.length === 0 ? (
+            {!selectedModelId ? (
+              <div className="card py-20 flex flex-col items-center text-center">
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+                  style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
+                  <Users className="w-8 h-8 text-violet-400" />
+                </div>
+                <p className="text-white font-semibold text-lg">Select a model to view their gallery</p>
+                <p className="text-slate-500 text-sm mt-1">Use the model switcher in the left sidebar</p>
+              </div>
+            ) : r2Loading ? (
+              <div className="card py-20 flex flex-col items-center text-center">
+                <Loader2 className="w-10 h-10 text-violet-400 animate-spin mb-4" />
+                <p className="text-slate-400 font-medium">Loading gallery…</p>
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="card py-16 flex flex-col items-center text-center">
                 <FolderOpen className="w-12 h-12 text-slate-700 mb-3" />
                 <p className="text-slate-400 font-medium">No assets found</p>
-                <p className="text-slate-600 text-sm mt-1">Upload files or connect your S3 bucket</p>
+                <p className="text-slate-600 text-sm mt-1">Drag &amp; drop files here or click Upload to add assets</p>
               </div>
             ) : viewMode === 'grid' ? (
               <div className={`grid gap-3 ${
