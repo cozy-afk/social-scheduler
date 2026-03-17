@@ -46,9 +46,8 @@ interface PostReferenceResponse {
   description: string;
 }
 
-const client = getAnthropicClient();
-
 export const POST = withErrorHandler(async (request: NextRequest) => {
+  const client = getAnthropicClient();
   const body = await parseRequestBody<ExtractCaptionRequest>(request);
 
   // Validate required fields

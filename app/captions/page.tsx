@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { mockModels, mockAdmin } from '@/lib/mockData';
-import AppHeader from '@/components/AppHeader';
 import { CaptionCategory, PostReference } from '@/types/models';
 import {
   Plus,
@@ -167,9 +166,8 @@ export default function CaptionsPage() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <AppHeader activePage="captions" />
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="min-h-screen">
+      <main className="max-w-5xl mx-auto px-6 py-6">
 
         {/* Page header */}
         <div className="mb-6 flex items-start justify-between gap-4">

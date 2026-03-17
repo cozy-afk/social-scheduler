@@ -1,25 +1,19 @@
 import { VAMagicLink, User } from '@/types/models';
 
-/** Magic link expiration duration in milliseconds (1 year) */
-const MAGIC_LINK_EXPIRATION_MS = 365 * 24 * 60 * 60 * 1000;
-
 /**
- * Creates a self-contained base64 token that encodes VA context.
- * No server-side lookup needed — the token IS the payload.
+ * Creates a permanent (no expiry) magic link for a VA.
+ * Only revocable manually via the admin panel.
  */
 export function createVAMagicLink(va: User): VAMagicLink {
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + MAGIC_LINK_EXPIRATION_MS);
 
   const payload = {
     vaId: va.id,
     vaName: va.name,
     assignedModels: va.assignedModels,
     createdAt: now.toISOString(),
-    expiresAt: expiresAt.toISOString(),
   };
 
-  // Base64url-encode the payload as the token
   const token = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 
   return {
@@ -29,7 +23,7 @@ export function createVAMagicLink(va: User): VAMagicLink {
     vaName: va.name,
     assignedModels: va.assignedModels,
     createdAt: now.toISOString(),
-    expiresAt: expiresAt.toISOString(),
+    expiresAt: '9999-12-31T23:59:59.000Z', // effectively permanent
     isActive: true,
   };
 }
@@ -42,10 +36,8 @@ export function decodeVAToken(token: string): {
   vaName: string;
   assignedModels: string[];
   createdAt: string;
-  expiresAt: string;
 } | null {
   try {
-    // Re-add base64 padding
     const padded = token.replace(/-/g, '+').replace(/_/g, '/');
     const pad = padded.length % 4;
     const padded2 = pad ? padded + '='.repeat(4 - pad) : padded;
@@ -66,14 +58,11 @@ export function getVAMagicLinkURL(token: string): string {
 }
 
 /**
- * Validate a magic link object.
+ * Validate a magic link — only checks isActive (no expiry check).
  */
 export function validateMagicLink(link: VAMagicLink): { valid: boolean; reason?: string } {
   if (!link.isActive) {
     return { valid: false, reason: 'Link has been deactivated' };
-  }
-  if (new Date() > new Date(link.expiresAt)) {
-    return { valid: false, reason: 'Link has expired' };
   }
   return { valid: true };
 }

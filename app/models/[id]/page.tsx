@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { mockModels, mockAdmin, mockVAUsers } from '@/lib/mockData';
-import AppHeader from '@/components/AppHeader';
+import ModelInsights from '@/components/ModelInsights';
 import { Platform, PostType, PostingFrequencyConfig, User } from '@/types/models';
 import { createVAMagicLink, getVAMagicLinkURL } from '@/lib/magic-links';
 import {
   ArrowLeft, Save, ToggleLeft, ToggleRight, Plus, X,
-  Check, Copy, Link2, Users, Clock, Zap, ChevronUp, ChevronDown,
-  Instagram, AlertCircle, KeyRound, RefreshCw,
+  Check, Copy, Link2, Users, Clock, ChevronUp, ChevronDown,
+  Instagram, AlertCircle, BarChart2, ExternalLink,
 } from 'lucide-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -337,7 +337,7 @@ export default function ModelSettingsPage() {
   const { models, setModels, setSelectedModelId, setCurrentUser, setVAUsers, updateModel, magicLinks, setMagicLinks } = useStore();
 
   const [saved, setSaved] = useState(false);
-  const [tab, setTab] = useState<'frequency' | 'va' | 'meta'>('frequency');
+  const [tab, setTab] = useState<'frequency' | 'va' | 'insights' | 'fanvue'>('frequency');
 
   // Frequency state (local copy for editing)
   const [frequency, setFrequency] = useState<PostingFrequencyConfig[]>([]);
@@ -345,6 +345,10 @@ export default function ModelSettingsPage() {
   // Meta connection state
   const [metaAccountId, setMetaAccountId] = useState('');
   const [metaAccessToken, setMetaAccessToken] = useState('');
+
+  // Fanvue connection state
+  const [fanvueHandle, setFanvueHandle] = useState('');
+  const [fanvueToken, setFanvueToken] = useState('');
 
   useEffect(() => {
     setModels(mockModels);
@@ -364,15 +368,38 @@ export default function ModelSettingsPage() {
       setMetaAccountId(model.metaConnection.instagramAccountId || '');
       setMetaAccessToken(model.metaConnection.accessToken || '');
     }
+    if (model?.fanvueAccountId) {
+      setFanvueHandle(model.fanvueAccountId);
+    }
+    if (model?.fanvueConnection?.accessToken) {
+      setFanvueToken(model.fanvueConnection.accessToken);
+    }
   }, [model]);
+
+  // Handle Fanvue OAuth callback redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const handle = params.get('fanvue_handle');
+    const token = params.get('fanvue_token');
+    if (handle && token) {
+      setFanvueHandle(handle);
+      setFanvueToken(token);
+      updateModel(modelId, {
+        fanvueAccountId: handle,
+        fanvueConnection: { accessToken: token, connectedAt: new Date().toISOString() },
+      });
+      // Clean up URL
+      window.history.replaceState({}, '', `/models/${modelId}`);
+    }
+  }, [modelId, updateModel]);
 
   const handleSave = () => {
     updateModel(modelId, {
       postingFrequency: frequency,
       metaConnection: {
-        instagramAccountId: metaAccountId,
-        accessToken: metaAccessToken,
-        connectedAt: metaAccountId ? new Date().toISOString() : undefined,
+        instagramAccountId: metaAccountId || undefined,
+        accessToken: metaAccessToken || undefined,
+        connectedAt: metaAccountId ? (model?.metaConnection?.connectedAt || new Date().toISOString()) : undefined,
       },
     });
     setSaved(true);
@@ -385,9 +412,8 @@ export default function ModelSettingsPage() {
 
   if (!model) {
     return (
-      <div className="min-h-screen bg-slate-950">
-        <AppHeader activePage="models" />
-        <main className="max-w-3xl mx-auto px-4 py-16 text-center">
+      <div className="min-h-screen">
+        <main className="max-w-3xl mx-auto px-6 py-16 text-center">
           <p className="text-slate-400">Model not found.</p>
           <button onClick={() => router.push('/models')} className="btn-secondary mt-4 text-sm">
             Back to Models
@@ -401,9 +427,8 @@ export default function ModelSettingsPage() {
   const totalPostsPerDay = enabledPlatforms.reduce((s, c) => s + c.postsPerDay, 0);
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <AppHeader activePage="models" />
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+    <div className="min-h-screen">
+      <main className="max-w-3xl mx-auto px-6 py-6 space-y-5">
         {/* Back + header */}
         <div className="flex items-center gap-3">
           <button
@@ -454,7 +479,8 @@ export default function ModelSettingsPage() {
           {([
             { id: 'frequency', label: 'Posting Frequency', icon: <Clock className="w-4 h-4" /> },
             { id: 'va',        label: 'VA Links',          icon: <Users className="w-4 h-4" /> },
-            { id: 'meta',      label: 'Meta API',          icon: <Instagram className="w-4 h-4" /> },
+            { id: 'insights',  label: 'Insights',          icon: <BarChart2 className="w-4 h-4" /> },
+            { id: 'fanvue',    label: 'Fanvue',            icon: <ExternalLink className="w-4 h-4" /> },
           ] as const).map(({ id, label, icon }) => (
             <button
               key={id}
@@ -490,62 +516,151 @@ export default function ModelSettingsPage() {
         {/* VA Links tab */}
         {tab === 'va' && <VALinksSection modelId={modelId} />}
 
-        {/* Meta API tab */}
-        {tab === 'meta' && (
+        {/* Fanvue tab */}
+        {tab === 'fanvue' && (
           <div className="card p-5 space-y-4">
             <div className="flex items-center gap-2">
-              <Instagram className="w-5 h-5 text-pink-400" />
-              <h3 className="font-semibold text-white">Meta Graph API Connection</h3>
-              {metaAccountId && (
+              <div className="w-5 h-5 rounded bg-orange-500 flex items-center justify-center text-white text-xs font-bold">F</div>
+              <h3 className="font-semibold text-white">Fanvue Connection</h3>
+              {fanvueHandle && (
                 <span className="text-xs bg-green-500/20 border border-green-500/30 text-green-400 px-2 py-0.5 rounded-full">
                   Connected
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400">
-              Connect this model's Instagram Business Account to pull real post data for feed preview and analytics.
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="label-dark">Instagram Business Account ID</label>
-                <input
-                  type="text"
-                  value={metaAccountId}
-                  onChange={(e) => setMetaAccountId(e.target.value)}
-                  placeholder="17841400008460056"
-                  className="input-dark"
-                />
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Find this in Meta Business Suite → Account Info
-                </p>
+
+            {fanvueHandle ? (
+              <div className="space-y-3">
+                <div className="bg-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center">
+                    <span className="text-orange-400 font-bold">F</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white">@{fanvueHandle}</p>
+                    <p className="text-xs text-slate-500">Fanvue Creator Account</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setFanvueHandle('');
+                      setFanvueToken('');
+                      updateModel(modelId, { fanvueConnection: { accessToken: '', connectedAt: undefined } });
+                    }}
+                    className="ml-auto text-xs text-red-400 hover:text-red-300"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">Posts tagged as &quot;Fanvue&quot; will be published to this account.</p>
               </div>
-              <div>
-                <label className="label-dark">Long-lived Access Token</label>
-                <input
-                  type="password"
-                  value={metaAccessToken}
-                  onChange={(e) => setMetaAccessToken(e.target.value)}
-                  placeholder="EAAxxxxx..."
-                  className="input-dark"
-                />
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Generate a long-lived token via the Meta Developers Portal. Tokens expire in 60 days.
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-slate-400">
+                  Connect your Fanvue creator account to schedule and publish posts directly from the calendar.
                 </p>
+
+                {/* Manual handle input */}
+                <div>
+                  <label className="label-dark text-xs">Fanvue Creator Handle</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={fanvueHandle}
+                      onChange={(e) => setFanvueHandle(e.target.value)}
+                      placeholder="your-fanvue-username"
+                      className="input-dark flex-1"
+                    />
+                    <button
+                      onClick={() => {
+                        if (fanvueHandle.trim()) {
+                          updateModel(modelId, { fanvueAccountId: fanvueHandle.trim() });
+                          setSaved(true);
+                          setTimeout(() => setSaved(false), 2500);
+                        }
+                      }}
+                      className="btn-primary text-sm px-3"
+                    >
+                      Save
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Your Fanvue username/handle for this model&apos;s account.</p>
+                </div>
+
+                {/* OAuth connect button */}
+                <div className="border-t border-slate-700 pt-3">
+                  <a
+                    href={`https://auth.fanvue.com/connect/authorize?client_id=${process.env.NEXT_PUBLIC_FANVUE_CLIENT_ID || ''}&response_type=code&redirect_uri=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin + '/api/oauth/fanvue/callback' : '')}&scope=read:self%20write:posts&state=${modelId}`}
+                    className="btn-secondary text-sm flex items-center gap-2 w-fit"
+                  >
+                    <div className="w-4 h-4 rounded bg-orange-500 flex items-center justify-center text-white text-[10px] font-bold">F</div>
+                    Connect with Fanvue OAuth
+                  </a>
+                  <p className="text-[10px] text-slate-500 mt-1">Requires FANVUE_CLIENT_ID to be configured in .env.local</p>
+                </div>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={handleSave} className="btn-primary flex items-center gap-2 text-sm">
-                <Zap className="w-4 h-4" /> Save Connection
-              </button>
-              {metaAccountId && (
-                <button
-                  onClick={() => { setMetaAccountId(''); setMetaAccessToken(''); }}
-                  className="btn-ghost text-sm text-red-400"
-                >
-                  Disconnect
+            )}
+          </div>
+        )}
+
+        {/* Insights tab — per-model Instagram credentials */}
+        {tab === 'insights' && (
+          <div className="space-y-3">
+            <div className="card p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Instagram className="w-4 h-4 text-pink-400" />
+                  <h3 className="text-sm font-semibold text-white">Instagram API Credentials</h3>
+                  {metaAccountId && metaAccessToken && (
+                    <span className="text-xs bg-green-500/20 border border-green-500/30 text-green-400 px-2 py-0.5 rounded-full">
+                      Connected
+                    </span>
+                  )}
+                </div>
+                <button onClick={handleSave} className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5">
+                  <Save className="w-3 h-3" /> Save
                 </button>
-              )}
+              </div>
+
+              <p className="text-xs text-slate-400">
+                Each model needs its own Instagram Business Account credentials. These are stored per-model and used for insights and hashtag research.
+              </p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="label-dark text-xs">Instagram Business Account ID</label>
+                  <input
+                    type="text"
+                    value={metaAccountId}
+                    onChange={(e) => setMetaAccountId(e.target.value)}
+                    placeholder="17841400008460056"
+                    className="input-dark"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Find in Meta Business Suite → Settings → Account Info
+                  </p>
+                </div>
+
+                <div>
+                  <label className="label-dark text-xs">Access Token</label>
+                  <input
+                    type="password"
+                    value={metaAccessToken}
+                    onChange={(e) => setMetaAccessToken(e.target.value)}
+                    placeholder="EAAxxxxxxxx..."
+                    className="input-dark font-mono text-xs"
+                    autoComplete="off"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Generate a long-lived page access token in Meta Developer Console. Required for Insights and Research features.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 text-xs text-blue-300">
+                <strong>Tip:</strong> To get your Access Token: Meta for Developers → Your App → Tools → Graph API Explorer → Generate Token with <code className="bg-slate-800 px-1 rounded">instagram_basic, instagram_manage_insights, pages_read_engagement</code> permissions.
+              </div>
             </div>
+
+            <ModelInsights accountId={metaAccountId} accessToken={metaAccessToken} />
           </div>
         )}
       </main>

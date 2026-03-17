@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { Asset } from '@/types/models';
-import { CarouselAnalysis, analyzeCarouselOrder } from '@/lib/carousel-analyzer';
+import { analyzeCarouselOrder } from '@/lib/carousel-analyzer';
+import type { CarouselAnalysis } from '@/types/utils';
 import { Sparkles, TrendingUp, AlertCircle, ArrowRight } from 'lucide-react';
 
 interface CarouselAnalyzerProps {
@@ -153,7 +154,7 @@ export default function CarouselAnalyzer({
 
                 {/* Viral Factors */}
                 <div className="grid grid-cols-5 gap-2 mb-3">
-                  {Object.entries(imgScore.viralFactors).map(([factor, score]) => (
+                  {(Object.entries(imgScore.viralFactors) as [string, number][]).map(([factor, score]) => (
                     <div key={factor} className="text-center">
                       <div className="text-xs text-gray-500 mb-1 capitalize">
                         {factor.replace(/([A-Z])/g, ' $1').trim()}

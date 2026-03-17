@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useStore } from '@/lib/store';
 import { mockModels, mockAdmin, mockVAUsers, mockPosts, mockCaptions } from '@/lib/mockData';
-import AppHeader from '@/components/AppHeader';
 import { createVAMagicLink, getVAMagicLinkURL } from '@/lib/magic-links';
 import { Model, User, TimeSlot, Platform, PostType, PostingFrequencyConfig } from '@/types/models';
 import {
@@ -501,6 +500,9 @@ function ModelsTab() {
         id: `model-${Date.now()}`,
         name: data.name,
         profileImage: data.profileImage || '👤',
+        agencyId: data.agencyId || '',
+        fanvueAccountId: data.fanvueAccountId || '',
+        s3Folder: data.s3Folder || '',
         exifPreset: DEFAULT_EXIF_PRESET,
         postingSchedule: data.postingSchedule || [],
         postingFrequency: DEFAULT_POSTING_FREQUENCY,
@@ -1027,10 +1029,8 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <AppHeader activePage="settings" />
-
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="min-h-screen">
+      <main className="max-w-5xl mx-auto px-6 py-6 space-y-6">
         {/* Page header */}
         <div>
           <h2 className="text-xl font-bold text-white">Settings</h2>

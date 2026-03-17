@@ -3,7 +3,6 @@ import {
   successResponse,
   errorResponse,
   getMetaConfig,
-  validateMetaConfig,
   buildMetaUrl,
   getErrorMessage,
   withErrorHandler,
@@ -21,55 +20,70 @@ export const GET = withErrorHandler(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url);
   const accountId = searchParams.get('accountId');
 
-  // Validate required parameters
   if (!accountId) {
     return errorResponse('accountId query parameter is required', 400);
   }
 
-  // Get and validate Meta config
   const config = getMetaConfig(request, searchParams);
-  try {
-    validateMetaConfig(config);
-  } catch (error) {
-    return errorResponse(getErrorMessage(error), 400);
-  }
-
   const { accessToken } = config;
 
-  // TypeScript: we know accessToken is defined after validateMetaConfig
   if (!accessToken) {
     return errorResponse('accessToken is required', 400);
   }
 
-  // Fetch IG Business Account insights
-  const [profileRes, insightsRes, mediaRes] = await Promise.all([
+  // Parallel fetches — profile, account-level insights, online followers, recent media
+  const [profileRes, insightsRes, onlineFollowersRes, mediaRes] = await Promise.all([
+    // Profile
     fetch(
       buildMetaUrl(accountId, {
         fields: 'id,name,username,profile_picture_url,followers_count,media_count,biography,website',
         access_token: accessToken,
       })
     ),
+    // Account insights — v22+ metrics (reach, interactions, engaged accounts, follower growth)
     fetch(
       buildMetaUrl(`${accountId}/insights`, {
-        metric: 'impressions,reach,profile_views,follower_count',
+        metric: 'reach,total_interactions,accounts_engaged,follows_and_unfollows,likes,saves,shares',
         period: 'day',
-        since: daysBefore(28),
-        until: nowUnix(),
+        since: String(daysBefore(28)),
+        until: String(nowUnix()),
         access_token: accessToken,
       })
     ),
+    // Online followers — lifetime breakdown by hour
+    fetch(
+      buildMetaUrl(`${accountId}/insights`, {
+        metric: 'online_followers',
+        period: 'lifetime',
+        access_token: accessToken,
+      })
+    ),
+    // Recent media (last 30 posts) with per-post insights
+    // Uses v22+ metrics: views replaces deprecated plays/impressions
     fetch(
       buildMetaUrl(`${accountId}/media`, {
-        fields: 'id,media_type,thumbnail_url,media_url,permalink,timestamp,like_count,comments_count,insights.metric(impressions,reach,engagement,saved)',
-        limit: 12,
+        fields: [
+          'id',
+          'media_type',
+          'thumbnail_url',
+          'media_url',
+          'permalink',
+          'timestamp',
+          'caption',
+          'like_count',
+          'comments_count',
+          'insights.metric(reach,total_interactions,likes,comments,saved,shares,views,ig_reels_avg_watch_time)',
+        ].join(','),
+        limit: '30',
         access_token: accessToken,
       })
     ),
   ]);
 
-  const [profile, insights, media] = await Promise.all([
+  const [profile, insights, onlineFollowers, media] = await Promise.all([
     profileRes.json(),
     insightsRes.json(),
+    onlineFollowersRes.json(),
     mediaRes.json(),
   ]);
 
@@ -77,5 +91,5 @@ export const GET = withErrorHandler(async (request: NextRequest) => {
     return errorResponse(`Meta API error: ${profile.error.message}`, 500);
   }
 
-  return successResponse({ profile, insights, media });
+  return successResponse({ profile, insights, onlineFollowers, media });
 });

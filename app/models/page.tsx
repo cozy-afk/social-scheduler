@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { mockModels, mockAdmin, mockVAUsers, mockPosts, mockCaptions } from '@/lib/mockData';
-import AppHeader from '@/components/AppHeader';
 import { Model, User, TimeSlot, Platform, PostType, PostingFrequencyConfig } from '@/types/models';
 import { createVAMagicLink, getVAMagicLinkURL } from '@/lib/magic-links';
 import {
@@ -500,6 +499,9 @@ export default function ModelsPage() {
         id: `model-${Date.now()}`,
         name: data.name,
         profileImage: data.profileImage || '👤',
+        agencyId: data.agencyId || '',
+        fanvueAccountId: data.fanvueAccountId || '',
+        s3Folder: data.s3Folder || '',
         exifPreset: {
           device: 'iPhone 16 Pro', model: 'iPhone17,1',
           lens: 'iPhone 16 Pro back triple camera 6.86mm f/1.78', software: 'iOS 18.2.1',
@@ -533,9 +535,8 @@ export default function ModelsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <AppHeader activePage="models" />
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="min-h-screen">
+      <main className="max-w-5xl mx-auto px-6 py-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>

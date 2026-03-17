@@ -1,6 +1,6 @@
 // ─── AI Provider Configuration ─────────────────────────────────────────────────────────
 
-export type AIProvider = 'anthropic' | 'openai' | 'glm-5' | 'custom';
+export type AIProvider = 'anthropic' | 'openai' | 'glm-5' | 'gemini' | 'grok' | 'custom';
 
 export interface AIProviderConfig {
   provider: AIProvider;
@@ -18,12 +18,20 @@ export interface AISettings {
     };
     openai?: {
       apiKey: string;
-      model: 'gpt-4' | 'gpt-4-turbo' | 'gpt-3.5-turbo';
+      model: 'gpt-4' | 'gpt-4-turbo' | 'gpt-4o' | 'gpt-4o-mini' | 'gpt-3.5-turbo';
     };
     'glm-5'?: {
       apiKey: string;
       model: string;
       baseUrl?: string;
+    };
+    gemini?: {
+      apiKey: string;
+      model: string;
+    };
+    grok?: {
+      apiKey: string;
+      model: string;
     };
     custom?: {
       apiKey: string;
@@ -63,6 +71,16 @@ export const AI_PROVIDERS = {
     models: ['glm-4-plus', 'glm-4', 'glm-3-turbo'],
     defaultModel: 'glm-4-plus',
   },
+  gemini: {
+    name: 'Google Gemini',
+    models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+    defaultModel: 'gemini-2.0-flash',
+  },
+  grok: {
+    name: 'xAI Grok',
+    models: ['grok-3', 'grok-3-mini', 'grok-2-vision-1212', 'grok-2-1212'],
+    defaultModel: 'grok-3',
+  },
   custom: {
     name: 'Custom Provider',
     models: [],
@@ -75,6 +93,8 @@ export const AI_ENV_KEYS = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
   'glm-5': 'GLM5_API_KEY',
+  gemini: 'GEMINI_API_KEY',
+  grok: 'GROK_API_KEY',
   custom: 'CUSTOM_AI_API_KEY',
 } as const;
 

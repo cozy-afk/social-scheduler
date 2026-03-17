@@ -28,12 +28,6 @@ export default function VATokenPage() {
       return;
     }
 
-    // Check expiry
-    if (new Date() > new Date(payload.expiresAt)) {
-      setStatus('invalid');
-      return;
-    }
-
     // Bootstrap store with VA context
     const va = {
       id: payload.vaId,

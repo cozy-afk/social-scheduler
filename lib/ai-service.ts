@@ -105,6 +105,12 @@ export class AIService {
         case 'glm-5':
           return await this.generateWithGLM5(prompt);
 
+        case 'gemini':
+          return await this.generateWithGemini(prompt);
+
+        case 'grok':
+          return await this.generateWithGrok(prompt);
+
         case 'custom':
           return await this.generateWithCustomProvider(prompt);
 
@@ -183,6 +189,48 @@ Return ONLY the 3 captions, one per line, nothing else. Do not number them or ad
     return parseCaptionResponse(text);
   }
 
+  private async generateWithGemini(prompt: string): Promise<string[]> {
+    const model = this.config.model || 'gemini-2.0-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.config.apiKey}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Gemini API request failed with status ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      return parseCaptionResponse(text);
+    } catch (error) {
+      // Fall back to OpenAI-compatible endpoint if native API fails
+      const fallbackText = await fetchOpenAICompatible(
+        'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+        this.config.apiKey,
+        prompt,
+        model
+      );
+      return parseCaptionResponse(fallbackText);
+    }
+  }
+
+  private async generateWithGrok(prompt: string): Promise<string[]> {
+    const text = await fetchOpenAICompatible(
+      'https://api.x.ai/v1/chat/completions',
+      this.config.apiKey,
+      prompt,
+      this.config.model || 'grok-3'
+    );
+    return parseCaptionResponse(text);
+  }
+
   private async generateWithCustomProvider(prompt: string): Promise<string[]> {
     if (!this.config.baseUrl) {
       throw new AIServiceError(
@@ -218,6 +266,16 @@ const DEFAULT_PROVIDER_CONFIGS: Record<AIProvider, () => AIProviderConfig> = {
     apiKey: process.env.GLM5_API_KEY ?? '',
     model: process.env.GLM5_MODEL ?? 'glm-4-plus',
     baseUrl: process.env.GLM5_BASE_URL,
+  }),
+  gemini: () => ({
+    provider: 'gemini' as const,
+    apiKey: process.env.GEMINI_API_KEY ?? '',
+    model: process.env.GEMINI_MODEL ?? 'gemini-2.0-flash',
+  }),
+  grok: () => ({
+    provider: 'grok' as const,
+    apiKey: process.env.GROK_API_KEY ?? '',
+    model: process.env.GROK_MODEL ?? 'grok-3',
   }),
   custom: () => ({
     provider: 'custom',

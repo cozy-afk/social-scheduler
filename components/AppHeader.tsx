@@ -2,7 +2,7 @@
 
 import { useStore } from '@/lib/store';
 import ModelSwitcher from '@/components/ModelSwitcher';
-import { Users, Calendar, FileText, LayoutGrid, Zap, Boxes, BarChart2, Settings } from 'lucide-react';
+import { Users, Calendar, FileText, LayoutGrid, Zap, Boxes, BarChart2, Settings, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import type { ActivePage } from '@/types/utils';
 
@@ -75,6 +75,10 @@ export default function AppHeader({ activePage, isVA = false }: AppHeaderProps) 
                 <Link href="/analytics" className={activePage === 'analytics' ? 'nav-link-active' : 'nav-link'}>
                   <BarChart2 className="w-4 h-4 flex-shrink-0" />
                   <span className="whitespace-nowrap">Analytics</span>
+                </Link>
+                <Link href="/research" className={activePage === 'research' ? 'nav-link-active' : 'nav-link'}>
+                  <TrendingUp className="w-4 h-4 flex-shrink-0" />
+                  <span className="whitespace-nowrap">Research</span>
                 </Link>
                 <Link href="/settings" className={activePage === 'settings' ? 'nav-link-active' : 'nav-link'}>
                   <Settings className="w-4 h-4 flex-shrink-0" />

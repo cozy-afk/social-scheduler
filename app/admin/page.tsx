@@ -1,53 +1,661 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useStore } from '@/lib/store';
-import ModelSwitcher from '@/components/ModelSwitcher';
+import { Agency } from '@/types/models';
 import {
-  Lock, Cloud, KeyRound, Check, Cpu,
+  Lock,
+  Building2,
+  Cpu,
+  Activity,
+  Plus,
+  Pencil,
+  Trash2,
+  Check,
+  X,
+  ChevronDown,
 } from 'lucide-react';
 
-export default function AdminPage() {
-  const { s3Config, setS3Config, metaConfig, setMetaConfig } = useStore();
+// ─── Local Types ──────────────────────────────────────────────────────────────
 
-  // S3 form state
-  const [s3Bucket,  setS3Bucket]  = useState(s3Config?.bucket          || '');
-  const [s3Region,  setS3Region]  = useState(s3Config?.region          || 'us-east-1');
-  const [s3Key,     setS3Key]     = useState(s3Config?.accessKeyId     || '');
-  const [s3Secret,  setS3Secret]  = useState(s3Config?.secretAccessKey || '');
-  const [s3Saved,   setS3Saved]   = useState(false);
+/** UI-layer extension: adds optional email to the domain Agency type */
+interface AgencyWithEmail extends Agency {
+  email?: string;
+}
 
-  // Meta form state
-  const [metaAccountId, setMetaAccountId] = useState(metaConfig?.accountId   || '');
-  const [metaToken,     setMetaToken]     = useState(metaConfig?.accessToken  || '');
-  const [metaIgUserId,  setMetaIgUserId]  = useState(metaConfig?.igUserId     || '');
-  const [metaSaved,     setMetaSaved]     = useState(false);
+type TabId = 'agencies' | 'ai' | 'status';
 
-  const saveS3 = () => {
-    setS3Config({ bucket: s3Bucket, region: s3Region, accessKeyId: s3Key, secretAccessKey: s3Secret });
-    setS3Saved(true);
-    setTimeout(() => setS3Saved(false), 2500);
-  };
+type AiProvider = 'anthropic' | 'openai' | 'gemini' | 'grok';
 
-  const disconnectS3 = () => {
-    setS3Config(null);
-    setS3Bucket(''); setS3Region('us-east-1'); setS3Key(''); setS3Secret('');
-  };
+interface AiProviderConfig {
+  id: AiProvider;
+  label: string;
+  icon: string;
+  iconColor: string;
+  models: string[];
+}
 
-  const saveMeta = () => {
-    setMetaConfig({ accountId: metaAccountId, accessToken: metaToken, igUserId: metaIgUserId });
-    setMetaSaved(true);
-    setTimeout(() => setMetaSaved(false), 2500);
-  };
+interface SystemStatus {
+  r2: { configured: boolean; bucket: string | null };
+  meta: { configured: boolean; appId: string | null };
+  ai: { provider: string; configured: boolean };
+  auth: { configured: boolean };
+}
 
-  const disconnectMeta = () => {
-    setMetaConfig(null);
-    setMetaAccountId(''); setMetaToken(''); setMetaIgUserId('');
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const AI_PROVIDERS: AiProviderConfig[] = [
+  {
+    id: 'anthropic',
+    label: 'Anthropic Claude',
+    icon: '🤖',
+    iconColor: 'text-orange-400',
+    models: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+  },
+  {
+    id: 'openai',
+    label: 'OpenAI GPT',
+    icon: '⚡',
+    iconColor: 'text-green-400',
+    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o3-mini'],
+  },
+  {
+    id: 'gemini',
+    label: 'Google Gemini',
+    icon: '✨',
+    iconColor: 'text-blue-400',
+    models: ['gemini-2.0-flash', 'gemini-2.0-pro', 'gemini-1.5-pro'],
+  },
+  {
+    id: 'grok',
+    label: 'xAI Grok',
+    icon: '🌐',
+    iconColor: 'text-purple-400',
+    models: ['grok-3', 'grok-3-mini', 'grok-2-vision-1212'],
+  },
+];
+
+const MOCK_AGENCIES: AgencyWithEmail[] = [
+  {
+    id: 'agency-1',
+    name: 'Apex Media Group',
+    email: 'contact@apexmedia.io',
+    featureAccess: { captions: true, analytics: true },
+    createdAt: '2025-11-01T09:00:00Z',
+  },
+  {
+    id: 'agency-2',
+    name: 'Stellar Content Co.',
+    email: 'hello@stellarcontent.com',
+    featureAccess: { captions: true, analytics: false },
+    createdAt: '2025-12-15T14:30:00Z',
+  },
+];
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function StatusBadge({ configured }: { configured: boolean }) {
+  return configured ? (
+    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-500/15 border border-green-500/30 text-green-400">
+      <Check className="w-3 h-3" />
+      Configured
+    </span>
+  ) : (
+    <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400">
+      Not set
+    </span>
+  );
+}
+
+function ToggleSwitch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer select-none">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 rounded-full transition-colors focus:outline-none ${
+          checked ? 'bg-violet-600' : 'bg-slate-700'
+        }`}
+      >
+        <span
+          className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transition-transform ${
+            checked ? 'translate-x-4' : 'translate-x-0.5'
+          }`}
+        />
+      </button>
+      <span className="text-sm text-slate-300">{label}</span>
+    </label>
+  );
+}
+
+// ─── Agency Modal ─────────────────────────────────────────────────────────────
+
+interface AgencyModalProps {
+  agency: AgencyWithEmail | null;
+  onClose: () => void;
+  onSave: (agency: AgencyWithEmail) => void;
+}
+
+function AgencyModal({ agency, onClose, onSave }: AgencyModalProps) {
+  const [name, setName] = useState(agency?.name ?? '');
+  const [email, setEmail] = useState(agency?.email ?? '');
+  const [captions, setCaptions] = useState(agency?.featureAccess.captions ?? true);
+  const [analytics, setAnalytics] = useState(agency?.featureAccess.analytics ?? false);
+
+  const isEditing = agency !== null;
+
+  const handleSubmit = () => {
+    if (!name.trim()) return;
+    const now = new Date().toISOString();
+    onSave({
+      id: agency?.id ?? `agency-${Date.now()}`,
+      name: name.trim(),
+      email: email.trim() || undefined,
+      featureAccess: { captions, analytics },
+      createdAt: agency?.createdAt ?? now,
+      updatedAt: now,
+    });
   };
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="card w-full max-w-md p-6 space-y-5 mx-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-white">
+            {isEditing ? 'Edit Agency' : 'Add Agency'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="label-dark">Agency Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input-dark"
+              placeholder="Apex Media Group"
+            />
+          </div>
+          <div>
+            <label className="label-dark">Contact Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="input-dark"
+              placeholder="contact@agency.com"
+            />
+          </div>
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+              Feature Access
+            </p>
+            <ToggleSwitch checked={captions} onChange={setCaptions} label="Caption Library" />
+            <ToggleSwitch checked={analytics} onChange={setAnalytics} label="Analytics Dashboard" />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim()}
+            className="btn-primary text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isEditing ? 'Save Changes' : 'Add Agency'}
+          </button>
+          <button
+            onClick={onClose}
+            className="text-sm text-slate-400 hover:text-white px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Agencies Tab ─────────────────────────────────────────────────────────────
+
+function AgenciesTab() {
+  const { agencies: storeAgencies, addAgency, updateAgency, deleteAgency } = useStore();
+
+  // Seed mock data into the store on first render if empty
+  const [seeded, setSeeded] = useState(false);
+  useEffect(() => {
+    if (!seeded && storeAgencies.length === 0) {
+      MOCK_AGENCIES.forEach((a) => {
+        const { email: _email, ...agencyBase } = a;
+        addAgency(agencyBase);
+      });
+      setSeeded(true);
+    } else {
+      setSeeded(true);
+    }
+  }, [seeded, storeAgencies.length, addAgency]);
+
+  // Keep local email state separate (not in the domain type)
+  const [emailMap, setEmailMap] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    MOCK_AGENCIES.forEach((a) => {
+      if (a.email) map[a.id] = a.email;
+    });
+    return map;
+  });
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<AgencyWithEmail | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const { models } = useStore();
+
+  const modelCountForAgency = (agencyId: string) =>
+    models.filter((m) => m.agencyId === agencyId).length;
+
+  const openAdd = () => {
+    setEditTarget(null);
+    setModalOpen(true);
+  };
+
+  const openEdit = (agency: Agency) => {
+    setEditTarget({ ...agency, email: emailMap[agency.id] });
+    setModalOpen(true);
+  };
+
+  const handleSave = (agency: AgencyWithEmail) => {
+    const { email, ...agencyBase } = agency;
+    if (editTarget) {
+      updateAgency(agency.id, agencyBase);
+    } else {
+      addAgency(agencyBase);
+    }
+    if (email) {
+      setEmailMap((prev) => ({ ...prev, [agency.id]: email }));
+    }
+    setModalOpen(false);
+    setEditTarget(null);
+  };
+
+  const handleDelete = (id: string) => {
+    deleteAgency(id);
+    setConfirmDeleteId(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-400">{storeAgencies.length} agencies registered</p>
+        <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm">
+          <Plus className="w-4 h-4" />
+          Add Agency
+        </button>
+      </div>
+
+      {storeAgencies.length === 0 ? (
+        <div className="card p-8 text-center text-slate-500 text-sm">
+          No agencies yet. Add the first one above.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {storeAgencies.map((agency) => (
+            <div key={agency.id} className="card p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-violet-400 shrink-0" />
+                    <span className="font-medium text-white truncate">{agency.name}</span>
+                  </div>
+                  {emailMap[agency.id] && (
+                    <p className="text-xs text-slate-400 pl-6">{emailMap[agency.id]}</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-3 pl-6 pt-1">
+                    <span className="text-xs text-slate-500">
+                      {modelCountForAgency(agency.id)} model
+                      {modelCountForAgency(agency.id) !== 1 ? 's' : ''}
+                    </span>
+                    <span className="text-xs text-slate-600">·</span>
+                    <span
+                      className={`text-xs ${
+                        agency.featureAccess.captions ? 'text-green-400' : 'text-slate-600'
+                      }`}
+                    >
+                      Captions {agency.featureAccess.captions ? 'on' : 'off'}
+                    </span>
+                    <span className="text-xs text-slate-600">·</span>
+                    <span
+                      className={`text-xs ${
+                        agency.featureAccess.analytics ? 'text-green-400' : 'text-slate-600'
+                      }`}
+                    >
+                      Analytics {agency.featureAccess.analytics ? 'on' : 'off'}
+                    </span>
+                    <span className="text-xs text-slate-600">·</span>
+                    <span className="text-xs text-slate-500">
+                      Created {new Date(agency.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => openEdit(agency)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                    aria-label={`Edit ${agency.name}`}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  {confirmDeleteId === agency.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleDelete(agency.id)}
+                        className="text-xs px-2 py-1 rounded bg-red-600 hover:bg-red-500 text-white transition-colors"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="text-xs px-2 py-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(agency.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      aria-label={`Delete ${agency.name}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modalOpen && (
+        <AgencyModal
+          agency={editTarget}
+          onClose={() => {
+            setModalOpen(false);
+            setEditTarget(null);
+          }}
+          onSave={handleSave}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── AI Config Tab ────────────────────────────────────────────────────────────
+
+function AiConfigTab() {
+  const [activeProvider, setActiveProvider] = useState<AiProvider>('anthropic');
+  const [selectedModels, setSelectedModels] = useState<Record<AiProvider, string>>({
+    anthropic: 'claude-sonnet-4-6',
+    openai: 'gpt-4o',
+    gemini: 'gemini-2.0-flash',
+    grok: 'grok-3',
+  });
+  const [apiKeys, setApiKeys] = useState<Record<AiProvider, string>>({
+    anthropic: '',
+    openai: '',
+    gemini: '',
+    grok: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const setModel = (provider: AiProvider, model: string) =>
+    setSelectedModels((prev) => ({ ...prev, [provider]: model }));
+
+  const setApiKey = (provider: AiProvider, key: string) =>
+    setApiKeys((prev) => ({ ...prev, [provider]: key }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveResult('idle');
+    try {
+      const res = await fetch('/api/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: activeProvider,
+          model: selectedModels[activeProvider],
+          apiKey: apiKeys[activeProvider],
+        }),
+      });
+      setSaveResult(res.ok ? 'success' : 'error');
+    } catch {
+      setSaveResult('error');
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveResult('idle'), 3000);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {AI_PROVIDERS.map((provider) => {
+          const isActive = activeProvider === provider.id;
+          const hasKey = apiKeys[provider.id].trim().length > 0;
+
+          return (
+            <div
+              key={provider.id}
+              className={`card p-5 space-y-4 transition-colors ${
+                isActive ? 'ring-2 ring-violet-500/60' : ''
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xl ${provider.iconColor}`}>{provider.icon}</span>
+                  <span className="font-medium text-white text-sm">{provider.label}</span>
+                </div>
+                <StatusBadge configured={hasKey} />
+              </div>
+
+              {/* Model selector */}
+              <div>
+                <label className="label-dark">Model</label>
+                <div className="relative">
+                  <select
+                    value={selectedModels[provider.id]}
+                    onChange={(e) => setModel(provider.id, e.target.value)}
+                    className="input-dark appearance-none pr-8"
+                  >
+                    {provider.models.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* API key input */}
+              <div>
+                <label className="label-dark">API Key</label>
+                <input
+                  type="password"
+                  value={apiKeys[provider.id]}
+                  onChange={(e) => setApiKey(provider.id, e.target.value)}
+                  className="input-dark"
+                  placeholder="sk-..."
+                  autoComplete="new-password"
+                />
+              </div>
+
+              {/* Active radio */}
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="radio"
+                  name="activeProvider"
+                  checked={isActive}
+                  onChange={() => setActiveProvider(provider.id)}
+                  className="accent-violet-500 w-4 h-4"
+                />
+                <span className="text-sm text-slate-300">Use as active provider</span>
+              </label>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Save button + disclaimer */}
+      <div className="space-y-3">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className={`btn-primary flex items-center gap-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed ${
+            saveResult === 'success' ? 'bg-green-600 hover:bg-green-600' : ''
+          } ${saveResult === 'error' ? 'bg-red-600 hover:bg-red-600' : ''}`}
+        >
+          {saving && (
+            <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+          )}
+          {saveResult === 'success' && <Check className="w-4 h-4" />}
+          {saveResult === 'success'
+            ? 'Saved'
+            : saveResult === 'error'
+            ? 'Error — try again'
+            : 'Save AI Config'}
+        </button>
+        <p className="text-xs text-slate-500 flex items-start gap-1.5">
+          <Lock className="w-3 h-3 mt-0.5 shrink-0" />
+          API keys are stored server-side only and never exposed to the browser.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── System Status Tab ────────────────────────────────────────────────────────
+
+interface StatusCardProps {
+  label: string;
+  detail?: string | null;
+  configured: boolean;
+}
+
+function StatusCard({ label, detail, configured }: StatusCardProps) {
+  return (
+    <div className="card p-5 flex items-center justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium text-white">{label}</p>
+        {detail && <p className="text-xs text-slate-500 mt-0.5">{detail}</p>}
+      </div>
+      <StatusBadge configured={configured} />
+    </div>
+  );
+}
+
+function SystemStatusTab() {
+  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStatus = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/config');
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      const json = await res.json();
+      setStatus(json.data as SystemStatus);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load status');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16 text-slate-500 text-sm gap-2">
+        <span className="w-4 h-4 rounded-full border-2 border-slate-600 border-t-slate-300 animate-spin" />
+        Loading system status…
+      </div>
+    );
+  }
+
+  if (error || !status) {
+    return (
+      <div className="card p-6 text-center space-y-3">
+        <p className="text-sm text-red-400">{error ?? 'Unknown error'}</p>
+        <button
+          onClick={fetchStatus}
+          className="text-sm text-violet-400 hover:text-violet-300 underline underline-offset-2"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <StatusCard
+        label="R2 Storage"
+        detail={status.r2.bucket ? `Bucket: ${status.r2.bucket}` : undefined}
+        configured={status.r2.configured}
+      />
+      <StatusCard
+        label="Meta API"
+        detail={status.meta.appId ? `App ID: ${status.meta.appId}` : undefined}
+        configured={status.meta.configured}
+      />
+      <StatusCard
+        label="AI Provider"
+        detail={`Provider: ${status.ai.provider}`}
+        configured={status.ai.configured}
+      />
+      <StatusCard label="Auth (Discord)" configured={status.auth.configured} />
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+  { id: 'agencies', label: 'Agencies', icon: <Building2 className="w-4 h-4" /> },
+  { id: 'ai', label: 'AI Config', icon: <Cpu className="w-4 h-4" /> },
+  { id: 'status', label: 'System Status', icon: <Activity className="w-4 h-4" /> },
+];
+
+export default function AdminPage() {
+  const [activeTab, setActiveTab] = useState<TabId>('agencies');
+
+  return (
+    <div className="min-h-screen">
+      <main className="max-w-4xl mx-auto px-6 py-10 space-y-8">
 
         {/* Page header */}
         <div className="space-y-1">
@@ -60,181 +668,30 @@ export default function AdminPage() {
           </p>
         </div>
 
-        {/* S3 Config */}
-        <div className="card p-6 space-y-5">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Cloud className="w-5 h-5 text-blue-400" />
-              <h2 className="text-base font-semibold text-white">S3 Bucket</h2>
-              {s3Config ? (
-                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-500/15 border border-green-500/30 text-green-400">
-                  <Check className="w-3 h-3" /> Connected
-                </span>
-              ) : (
-                <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400">
-                  Not connected
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-slate-400">
-              Connect your S3 bucket to browse and import content directly into the gallery.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label-dark">Bucket Name</label>
-              <input
-                type="text"
-                value={s3Bucket}
-                onChange={(e) => setS3Bucket(e.target.value)}
-                className="input-dark"
-                placeholder="my-media-bucket"
-              />
-            </div>
-            <div>
-              <label className="label-dark">Region</label>
-              <input
-                type="text"
-                value={s3Region}
-                onChange={(e) => setS3Region(e.target.value)}
-                className="input-dark"
-                placeholder="us-east-1"
-              />
-            </div>
-            <div>
-              <label className="label-dark">Access Key ID</label>
-              <input
-                type="text"
-                value={s3Key}
-                onChange={(e) => setS3Key(e.target.value)}
-                className="input-dark"
-                placeholder="AKIAIOSFODNN7EXAMPLE"
-              />
-            </div>
-            <div>
-              <label className="label-dark">Secret Access Key</label>
-              <input
-                type="password"
-                value={s3Secret}
-                onChange={(e) => setS3Secret(e.target.value)}
-                className="input-dark"
-                placeholder="••••••••••••••••••••"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 pt-1">
+        {/* Tab bar */}
+        <div className="flex items-center gap-1 border-b border-slate-800 pb-0">
+          {TABS.map((tab) => (
             <button
-              onClick={saveS3}
-              disabled={!s3Bucket.trim() || !s3Key.trim() || !s3Secret.trim()}
-              className={`btn-primary flex items-center gap-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed ${
-                s3Saved ? 'bg-green-600 hover:bg-green-600' : ''
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
+                activeTab === tab.id
+                  ? 'text-white border-violet-500 bg-slate-900/60'
+                  : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-900/40'
               }`}
             >
-              {s3Saved ? <><Check className="w-4 h-4" /> Saved</> : 'Save Connection'}
+              {tab.icon}
+              {tab.label}
             </button>
-            {s3Config && (
-              <button
-                onClick={disconnectS3}
-                className="text-sm text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-colors"
-              >
-                Disconnect
-              </button>
-            )}
-          </div>
+          ))}
         </div>
 
-        {/* Meta / Instagram Graph API */}
-        <div className="card p-6 space-y-5">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <KeyRound className="w-5 h-5 text-pink-400" />
-              <h2 className="text-base font-semibold text-white">Meta / Instagram Graph API</h2>
-              {metaConfig ? (
-                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-500/15 border border-green-500/30 text-green-400">
-                  <Check className="w-3 h-3" /> Connected
-                </span>
-              ) : (
-                <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400">
-                  Not connected
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-slate-400">
-              Required for Analytics insights and trend discovery.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label-dark">Account ID</label>
-              <input
-                type="text"
-                value={metaAccountId}
-                onChange={(e) => setMetaAccountId(e.target.value)}
-                className="input-dark"
-                placeholder="17841400008460056"
-              />
-            </div>
-            <div>
-              <label className="label-dark">IG User ID</label>
-              <input
-                type="text"
-                value={metaIgUserId}
-                onChange={(e) => setMetaIgUserId(e.target.value)}
-                className="input-dark"
-                placeholder="17841400008460056"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="label-dark">Access Token</label>
-              <input
-                type="password"
-                value={metaToken}
-                onChange={(e) => setMetaToken(e.target.value)}
-                className="input-dark"
-                placeholder="EAABsb..."
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              onClick={saveMeta}
-              disabled={!metaAccountId.trim() || !metaToken.trim()}
-              className={`btn-primary flex items-center gap-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed ${
-                metaSaved ? 'bg-green-600 hover:bg-green-600' : ''
-              }`}
-            >
-              {metaSaved ? <><Check className="w-4 h-4" /> Saved</> : 'Save Connection'}
-            </button>
-            {metaConfig && (
-              <button
-                onClick={disconnectMeta}
-                className="text-sm text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-colors"
-              >
-                Disconnect
-              </button>
-            )}
-          </div>
+        {/* Tab content */}
+        <div>
+          {activeTab === 'agencies' && <AgenciesTab />}
+          {activeTab === 'ai' && <AiConfigTab />}
+          {activeTab === 'status' && <SystemStatusTab />}
         </div>
-
-        {/* LLM Model Selection */}
-        <div className="card p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <Cpu className="w-5 h-5 text-purple-400" />
-            <h2 className="text-base font-semibold text-white">LLM Model Selection</h2>
-          </div>
-          <p className="text-sm text-slate-400">
-            Choose which Claude model powers AI features such as caption generation and post suggestions.
-            The selected model applies globally to all AI-assisted workflows.
-          </p>
-          <div className="flex items-center gap-3">
-            <ModelSwitcher />
-          </div>
-        </div>
-
       </main>
     </div>
   );

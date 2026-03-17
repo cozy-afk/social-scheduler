@@ -91,14 +91,10 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   }
 
   // Validate provider
-  if (
-    provider !== 'anthropic' &&
-    provider !== 'openai' &&
-    provider !== 'glm-5' &&
-    provider !== 'custom'
-  ) {
+  const validProviders: AIProvider[] = ['anthropic', 'openai', 'glm-5', 'gemini', 'grok', 'custom'];
+  if (!validProviders.includes(provider)) {
     return errorResponse(
-      `Invalid provider: ${provider}. Must be one of: anthropic, openai, glm-5, custom`,
+      `Invalid provider: ${provider}. Must be one of: ${validProviders.join(', ')}`,
       400
     );
   }

@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import type { MetaConfig } from '@/lib/store';
 import { mockModels, mockAdmin } from '@/lib/mockData';
-import AppHeader from '@/components/AppHeader';
 import {
   BarChart2, TrendingUp, Users, Heart, MessageCircle,
   Search, Plus, X, Loader2, AlertCircle, ExternalLink,
@@ -214,14 +213,14 @@ function ModelAnalyticsTab() {
           <div className="w-9 h-9 bg-gradient-to-br from-pink-500 to-purple-600 rounded-xl flex items-center justify-center text-lg">
             {selectedModel?.profileImage || '👤'}
           </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-white">{selectedModel?.name || 'Select a model'}</h3>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-white truncate">{selectedModel?.name || 'Select a model'}</h3>
             <p className="text-xs text-slate-400">Connect Instagram Business Account</p>
           </div>
           <select
             value={selectedModelId}
             onChange={(e) => { setSelectedModelId(e.target.value); setData(null); }}
-            className="input-dark text-sm py-1.5 pr-8"
+            className="input-dark text-sm py-1.5 pr-8 w-auto max-w-[200px]"
           >
             {models.map((m) => (
               <option key={m.id} value={m.id}>{m.profileImage} {m.name}</option>
@@ -596,9 +595,8 @@ export default function AnalyticsPage() {
   }, [setModels, setSelectedModelId, setCurrentUser]);
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <AppHeader activePage="analytics" />
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
+    <div className="min-h-screen">
+      <main className="max-w-5xl mx-auto px-6 py-6 space-y-5">
         {/* Page header */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-600/20 border border-blue-500/30 rounded-xl flex items-center justify-center">

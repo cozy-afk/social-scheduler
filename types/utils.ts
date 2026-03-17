@@ -165,5 +165,5 @@ export interface MediaItem {
 
 // ─── Component Props Types ─────────────────────────────────────────────────────────
 
-export type ActivePage = 'calendar' | 'captions' | 'va' | 'models' | 'gallery' | 'analytics' | 'settings';
+export type ActivePage = 'calendar' | 'captions' | 'va' | 'models' | 'gallery' | 'analytics' | 'settings' | 'research';
 export type CalendarViewType = 'day' | 'week' | 'month';

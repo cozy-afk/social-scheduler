@@ -3,26 +3,226 @@
 import { useStore } from '@/lib/store';
 import { useMemo } from 'react';
 import { format } from 'date-fns';
-import { Download, CheckCircle, Film, Image as ImageIcon } from 'lucide-react';
-import { Post } from '@/types/models';
+import { Download, CheckCircle, Play } from 'lucide-react';
+import { Post, Platform } from '@/types/models';
+import clsx from 'clsx';
 
-const POST_TYPE_DISPLAY: Partial<Record<string, string>> = {
-  instagram_post:    'Instagram Post (Carousel)',
-  instagram_reel:    'Instagram Reel',
-  instagram_story:   'Instagram Story',
-  tiktok_reel:       'TikTok Reel',
-  tiktok_slideshow:  'TikTok Slideshow',
-  tiktok_story:      'TikTok Story',
-  x_post:            'X Post',
-  threads_post:      'Threads Post',
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const POST_TYPE_SHORT: Partial<Record<string, string>> = {
+  instagram_post:   'IG Post',
+  instagram_reel:   'IG Reel',
+  instagram_story:  'IG Story',
+  tiktok_reel:      'TT Reel',
+  tiktok_slideshow: 'TT Slideshow',
+  tiktok_story:     'TT Story',
+  x_post:           'X Post',
+  threads_post:     'Threads Post',
+  fanvue_post:      'Fanvue Post',
 };
 
-const PLATFORM_COLORS: Record<string, string> = {
-  instagram: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
-  tiktok:    'bg-red-500/20 text-red-300 border-red-500/30',
-  x:         'bg-slate-500/20 text-slate-300 border-slate-500/30',
-  threads:   'bg-purple-500/20 text-purple-300 border-purple-500/30',
+const PLATFORM_BADGE_CLASSES: Record<Platform, string> = {
+  instagram: 'bg-pink-500/90 text-white',
+  tiktok:    'bg-red-500/90 text-white',
+  threads:   'bg-purple-500/90 text-white',
+  x:         'bg-slate-500/90 text-white',
+  fanvue:    'bg-orange-500/90 text-white',
 };
+
+const PLATFORM_GRADIENT: Record<Platform, string> = {
+  instagram: 'from-pink-600/40 to-pink-900/40',
+  tiktok:    'from-red-600/40 to-red-900/40',
+  threads:   'from-purple-600/40 to-purple-900/40',
+  x:         'from-slate-500/40 to-slate-800/40',
+  fanvue:    'from-orange-600/40 to-orange-900/40',
+};
+
+const PLATFORM_LABEL: Record<Platform, string> = {
+  instagram: 'Instagram',
+  tiktok:    'TikTok',
+  threads:   'Threads',
+  x:         'X',
+  fanvue:    'Fanvue',
+};
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+interface ThumbnailProps {
+  post: Post;
+}
+
+function CardThumbnail({ post }: ThumbnailProps) {
+  const asset = post.assets[0];
+  const isVideo = asset?.fileType === 'video';
+  const hasUrl = typeof asset?.fileUrl === 'string' && asset.fileUrl.startsWith('http');
+  const gradient = PLATFORM_GRADIENT[post.platform];
+
+  if (!asset || !hasUrl) {
+    return (
+      <div className={clsx('w-full h-full bg-gradient-to-br', gradient, 'flex items-center justify-center')}>
+        <span className="text-3xl opacity-60">
+          {post.platform === 'instagram' ? '📸' : post.platform === 'tiktok' ? '🎵' : post.platform === 'threads' ? '🧵' : post.platform === 'fanvue' ? '🎭' : '𝕏'}
+        </span>
+      </div>
+    );
+  }
+
+  if (isVideo) {
+    return (
+      <div className="w-full h-full bg-slate-900 flex items-center justify-center relative">
+        <Play className="w-10 h-10 text-white/80" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={asset.fileUrl}
+      alt=""
+      className="w-full h-full object-cover"
+    />
+  );
+}
+
+interface ApprovalBadgeProps {
+  status: Post['approvalStatus'];
+}
+
+function ApprovalBadge({ status }: ApprovalBadgeProps) {
+  if (!status) return null;
+
+  const classes = {
+    approved: 'bg-green-500/20 text-green-300 border border-green-500/30',
+    pending:  'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30',
+    rejected: 'bg-red-500/20 text-red-300 border border-red-500/30',
+  }[status];
+
+  const labels = {
+    approved: 'Approved',
+    pending:  'Pending Review',
+    rejected: 'Rejected',
+  }[status];
+
+  return (
+    <span className={clsx('text-[10px] font-semibold px-2 py-0.5 rounded-full', classes)}>
+      {labels}
+    </span>
+  );
+}
+
+// ─── Task Card ────────────────────────────────────────────────────────────────
+
+interface TaskCardProps {
+  post: Post;
+  onDownloadAsset: (post: Post, assetIndex?: number) => void;
+  onMarkAsPosted: (postId: string) => void;
+}
+
+function TaskCard({ post, onDownloadAsset, onMarkAsPosted }: TaskCardProps) {
+  const scheduledDate = new Date(post.scheduledTime);
+  const scheduledLabel = format(scheduledDate, 'MMM d · h:mm a');
+  const isVideo = post.assets[0]?.fileType === 'video';
+  const captionPreview = post.description
+    ? post.description.length > 120
+      ? post.description.slice(0, 120) + '…'
+      : post.description
+    : null;
+
+  return (
+    <div className="card overflow-hidden flex flex-col">
+      {/* Thumbnail — ~40% of card height */}
+      <div className="relative w-full" style={{ paddingBottom: '42%' }}>
+        <div className="absolute inset-0">
+          <CardThumbnail post={post} />
+        </div>
+
+        {/* Platform badge — top-right */}
+        <span
+          className={clsx(
+            'absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full',
+            PLATFORM_BADGE_CLASSES[post.platform]
+          )}
+        >
+          {PLATFORM_LABEL[post.platform]}
+        </span>
+      </div>
+
+      {/* Card body */}
+      <div className="flex flex-col gap-2.5 p-3 flex-1">
+        {/* Post type + scheduled time row */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-slate-200">
+            {POST_TYPE_SHORT[post.postType] ?? post.postType}
+          </span>
+          <span className="text-[11px] text-slate-400">{scheduledLabel}</span>
+        </div>
+
+        {/* Approval status */}
+        {post.approvalStatus && (
+          <div>
+            <ApprovalBadge status={post.approvalStatus} />
+          </div>
+        )}
+
+        {/* Caption preview */}
+        {captionPreview && (
+          <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">{captionPreview}</p>
+        )}
+
+        {/* Image caption overlay note */}
+        {post.imageCaption && (
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg px-2.5 py-1.5">
+            <p className="text-[10px] text-blue-400 font-medium mb-0.5">Image caption overlay</p>
+            <p className="text-xs text-blue-200 truncate">"{post.imageCaption}"</p>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="space-y-1.5 mt-auto pt-1">
+          {post.assets.length === 1 ? (
+            <button
+              onClick={() => onDownloadAsset(post)}
+              className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download {isVideo ? 'Video' : 'Image'}
+            </button>
+          ) : (
+            <div className="space-y-1">
+              {post.assets.map((asset, idx) => (
+                <button
+                  key={asset.id}
+                  onClick={() => onDownloadAsset(post, idx)}
+                  className="btn-ghost w-full flex items-center gap-2 justify-center text-xs py-1.5"
+                >
+                  <Download className="w-3 h-3" />
+                  {isVideo ? 'Video' : 'Image'} {asset.order}
+                </button>
+              ))}
+              <button
+                onClick={() => onDownloadAsset(post)}
+                className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download All ({post.assets.length})
+              </button>
+            </div>
+          )}
+
+          <button
+            onClick={() => onMarkAsPosted(post.id)}
+            className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all duration-150 active:scale-95"
+          >
+            <CheckCircle className="w-4 h-4" />
+            Mark as Posted
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function VATaskQueue() {
   const { models, selectedModelId, posts, currentUser, updatePost } = useStore();
@@ -95,94 +295,16 @@ export default function VATaskQueue() {
         </span>
       </div>
 
-      {assignedPosts.map((post) => {
-        const scheduledDate = new Date(post.scheduledTime);
-        const isToday = format(scheduledDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-        const timeLabel = isToday ? 'Today' : format(scheduledDate, 'MMM d');
-        const isVideo = post.assets[0]?.fileType === 'video';
-
-        return (
-          <div key={post.id} className="card p-4 space-y-4">
-            {/* Header */}
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`platform-chip border ${PLATFORM_COLORS[post.platform] || 'bg-slate-700 text-slate-300 border-slate-600'}`}>
-                    {post.platform}
-                  </span>
-                  <span className="text-sm font-semibold text-white">
-                    {POST_TYPE_DISPLAY[post.postType] || post.postType}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400">
-                  ⏰ {timeLabel} at {format(scheduledDate, 'h:mm a')}
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-slate-400 flex-shrink-0">
-                {isVideo ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />}
-                {post.assets.length} {isVideo ? 'video' : `image${post.assets.length > 1 ? 's' : ''}`}
-              </div>
-            </div>
-
-            {/* Description */}
-            {post.description && (
-              <div className="bg-slate-800/60 rounded-lg px-3 py-2">
-                <p className="text-xs text-slate-500 mb-1 font-medium">Description</p>
-                <p className="text-sm text-slate-300 italic">"{post.description}"</p>
-              </div>
-            )}
-
-            {/* Image Caption */}
-            {post.imageCaption && (
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg px-3 py-2">
-                <p className="text-xs text-blue-400 mb-1 font-medium">Image Caption (overlay)</p>
-                <p className="text-sm text-blue-200">"{post.imageCaption}"</p>
-              </div>
-            )}
-
-            {/* Download buttons */}
-            <div className="space-y-2">
-              {post.assets.length === 1 ? (
-                <button
-                  onClick={() => handleDownloadAsset(post)}
-                  className="btn-primary w-full flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Download {isVideo ? 'Video' : 'Image'}
-                </button>
-              ) : (
-                <div className="space-y-1.5">
-                  {post.assets.map((asset, idx) => (
-                    <button
-                      key={asset.id}
-                      onClick={() => handleDownloadAsset(post, idx)}
-                      className="btn-secondary w-full flex items-center gap-2 justify-center text-sm"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      {isVideo ? 'Video' : 'Image'} {asset.order}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => handleDownloadAsset(post)}
-                    className="btn-primary w-full flex items-center justify-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download All ({post.assets.length} files)
-                  </button>
-                </div>
-              )}
-
-              <button
-                onClick={() => handleMarkAsPosted(post.id)}
-                className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white font-medium px-4 py-2 rounded-lg transition-all duration-150 active:scale-95"
-              >
-                <CheckCircle className="w-4 h-4" />
-                Mark as Posted
-              </button>
-            </div>
-          </div>
-        );
-      })}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {assignedPosts.map((post) => (
+          <TaskCard
+            key={post.id}
+            post={post}
+            onDownloadAsset={handleDownloadAsset}
+            onMarkAsPosted={handleMarkAsPosted}
+          />
+        ))}
+      </div>
     </div>
   );
 }

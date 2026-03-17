@@ -10,6 +10,7 @@ import {
   AlertCircle,
   RefreshCw,
   Layers,
+  Eye,
 } from 'lucide-react';
 import { CaptionCategory, PostReference } from '@/types/models';
 
@@ -25,8 +26,9 @@ type Tab = 'screenshot' | 'url';
 
 type ExtractedData = {
   coverImageUrl: string | null;
-  caption: string;
-  description: string;
+  caption: string;       // Hook / first line
+  description: string;   // Full post body
+  imageCaption: string;  // Text overlay on the image
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -74,6 +76,65 @@ function PlatformBadge({ platform }: { platform: DetectedPlatform }) {
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${className}`}>
       {label}
     </span>
+  );
+}
+
+// ─── Inline embed preview ─────────────────────────────────────────────────────
+
+function getEmbedUrl(platform: DetectedPlatform, rawUrl: string): string | null {
+  try {
+    const url = new URL(rawUrl);
+    const path = url.pathname;
+    if (platform === 'instagram') {
+      const m = path.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+      if (m) return `https://www.instagram.com/${m[1]}/${m[2]}/embed/`;
+    }
+    if (platform === 'tiktok') {
+      const m = path.match(/\/video\/(\d+)/);
+      if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
+    }
+    if (platform === 'x') {
+      const m = path.match(/\/status\/(\d+)/);
+      if (m) return `https://platform.twitter.com/embed/Tweet.html?id=${m[1]}&theme=dark&chrome=nofooter`;
+    }
+    if (platform === 'threads') {
+      const m = path.match(/\/([^/]+)\/post\/([A-Za-z0-9_-]+)/);
+      if (m) return `https://www.threads.net/${m[1]}/post/${m[2]}/embed`;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+const EMBED_HEIGHTS: Record<DetectedPlatform, number> = {
+  instagram: 540, tiktok: 700, x: 280, threads: 360, unknown: 400,
+};
+
+function InlineEmbedPreview({ platform, url }: { platform: DetectedPlatform; url: string }) {
+  const [open, setOpen] = useState(false);
+  const embedUrl = getEmbedUrl(platform, url);
+  if (!embedUrl) return null;
+  return (
+    <div className="rounded-xl overflow-hidden border border-white/8 mt-1">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-white/4 transition-colors"
+      >
+        <Eye className="w-3.5 h-3.5" />
+        {open ? 'Hide' : 'Preview'} how it looks on {platform.charAt(0).toUpperCase() + platform.slice(1)}
+      </button>
+      {open && (
+        <div style={{ height: EMBED_HEIGHTS[platform] }}>
+          <iframe
+            src={embedUrl}
+            className="w-full h-full border-0"
+            allowFullScreen
+            loading="lazy"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            style={{ background: '#000' }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -144,27 +205,43 @@ function PreviewForm({
         )}
       </div>
 
-      {/* Caption */}
+      {/* Caption (hook) */}
       <div>
-        <label className="label-dark">Caption</label>
+        <label className="label-dark">Hook / Opening Line</label>
         <textarea
           value={extracted.caption}
           onChange={(e) => onFieldChange({ caption: e.target.value })}
           rows={2}
           className="input-dark resize-none text-sm"
-          placeholder="Short hook or first line of the post…"
+          placeholder="The first line or hook that grabs attention…"
         />
       </div>
 
       {/* Description */}
       <div>
-        <label className="label-dark">Description</label>
+        <label className="label-dark">Post Caption (full body)</label>
         <textarea
           value={extracted.description}
           onChange={(e) => onFieldChange({ description: e.target.value })}
           rows={3}
           className="input-dark resize-none text-sm"
           placeholder="Full caption or post body…"
+        />
+      </div>
+
+      {/* Image caption / text overlay */}
+      <div>
+        <label className="label-dark flex items-center gap-1.5">
+          <span className="text-amber-400">T</span>
+          Image Text Overlay
+          <span className="text-[10px] font-normal" style={{ color: 'var(--text-muted)' }}>— text printed ON the image</span>
+        </label>
+        <textarea
+          value={extracted.imageCaption}
+          onChange={(e) => onFieldChange({ imageCaption: e.target.value })}
+          rows={2}
+          className="input-dark resize-none text-sm"
+          placeholder="Text visible on the image itself (e.g. slide text, overlay caption)…"
         />
       </div>
 
@@ -284,6 +361,7 @@ function ScreenshotTab({
         coverImageUrl: data.coverImageUrl ?? null,
         caption: data.caption ?? '',
         description: data.description ?? '',
+        imageCaption: data.imageCaption ?? '',
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to extract');
@@ -304,6 +382,7 @@ function ScreenshotTab({
       coverImageUrl: extracted.coverImageUrl || manualCoverUrl || null,
       caption: extracted.caption,
       description: extracted.description,
+      imageCaption: extracted.imageCaption || undefined,
       sourcePlatform: platform,
       createdAt: new Date().toISOString(),
       tags: [],
@@ -481,6 +560,7 @@ function URLTab({
       let coverImageUrl: string | null = data.coverImageUrl ?? null;
       let caption: string = data.caption ?? '';
       let description: string = data.description ?? '';
+      let imageCaption: string = data.imageCaption ?? '';
 
       // Step 2: if on-image text extraction is on and we have a cover image, do vision analysis
       if (extractOnImageText && coverImageUrl) {
@@ -492,17 +572,16 @@ function URLTab({
           });
           if (visionRes.ok) {
             const visionData = await visionRes.json();
-            // Merge: keep existing caption/description if richer, append on-image text if found
-            if (visionData.description && visionData.description.includes('On-image text:')) {
+            // Use imageCaption from vision if available, else look in description
+            if (visionData.imageCaption) {
+              imageCaption = visionData.imageCaption;
+            } else if (visionData.description && visionData.description.includes('On-image text:')) {
               const onImagePart = visionData.description
                 .split('\n')
                 .filter((line: string) => line.startsWith('On-image text:'))
+                .map((line: string) => line.replace('On-image text:', '').trim())
                 .join('\n');
-              if (onImagePart) {
-                description = description
-                  ? `${description}\n\n${onImagePart}`
-                  : onImagePart;
-              }
+              if (onImagePart) imageCaption = onImagePart;
             }
           }
         } catch {
@@ -510,7 +589,7 @@ function URLTab({
         }
       }
 
-      setExtracted({ coverImageUrl, caption, description });
+      setExtracted({ coverImageUrl, caption, description, imageCaption });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Fetch failed');
     } finally {
@@ -530,6 +609,7 @@ function URLTab({
       coverImageUrl: extracted.coverImageUrl || manualCoverUrl || null,
       caption: extracted.caption,
       description: extracted.description,
+      imageCaption: extracted.imageCaption || undefined,
       sourceUrl: sourceUrl || undefined,
       sourcePlatform: platform,
       createdAt: new Date().toISOString(),
@@ -616,6 +696,11 @@ function URLTab({
               </span>
             )}
           </div>
+        )}
+
+        {/* Native embed preview */}
+        {detectedPlatform !== 'unknown' && url.trim().length > 0 && (
+          <InlineEmbedPreview platform={detectedPlatform} url={url.trim()} />
         )}
       </div>
 
