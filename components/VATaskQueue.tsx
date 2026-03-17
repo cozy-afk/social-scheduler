@@ -4,9 +4,9 @@ import { useStore } from '@/lib/store';
 import { useMemo, useState, useCallback, useRef } from 'react';
 import { format, isToday, isTomorrow, isPast, parseISO } from 'date-fns';
 import {
-  Download, CheckCircle2, Play, Copy, Check, Link,
+  Download, CheckCircle2, Copy, Check, Link,
   AlertCircle, Clock, ChevronDown, ChevronUp, ExternalLink,
-  Image as ImageIcon, FileVideo, Layers,
+  Image as ImageIcon, FileVideo, Layers, Clipboard, CheckCheck,
 } from 'lucide-react';
 import { Post, Platform } from '@/types/models';
 import clsx from 'clsx';
@@ -99,6 +99,20 @@ function buildFilename(post: Post, assetOrder: number, total: number): string {
     : `${platform}_${kind}_${date}_${time}.${ext}`;
 }
 
+// ─── Platform URL patterns ────────────────────────────────────────────────────
+
+const PLATFORM_URL_PATTERNS: Record<Platform, RegExp[]> = {
+  instagram: [/instagram\.com\/(p|reel|stories)\/[\w-]+/i],
+  tiktok:    [/tiktok\.com\/@[\w.]+\/video\/\d+/i, /vm\.tiktok\.com\/\w+/i],
+  threads:   [/threads\.net\/@[\w.]+\/post\/[\w-]+/i],
+  x:         [/x\.com\/\w+\/status\/\d+/i, /twitter\.com\/\w+\/status\/\d+/i],
+  fanvue:    [/fanvue\.com\//i],
+};
+
+function isPlatformUrl(url: string, platform: Platform): boolean {
+  return PLATFORM_URL_PATTERNS[platform].some((re) => re.test(url));
+}
+
 // ─── Task Card ────────────────────────────────────────────────────────────────
 
 interface TaskCardProps {
@@ -106,11 +120,14 @@ interface TaskCardProps {
   onComplete: (postId: string, postedUrl: string) => void;
 }
 
+type ClipboardState = 'idle' | 'reading' | 'detected' | 'not-found' | 'denied';
+
 function TaskCard({ post, onComplete }: TaskCardProps) {
   const [urlInput, setUrlInput] = useState('');
   const [showUrlField, setShowUrlField] = useState(false);
   const [urlError, setUrlError] = useState('');
   const [downloadedAll, setDownloadedAll] = useState(false);
+  const [clipState, setClipState] = useState<ClipboardState>('idle');
   const urlRef = useRef<HTMLInputElement>(null);
 
   const colors = PLATFORM_COLORS[post.platform];
@@ -124,12 +141,11 @@ function TaskCard({ post, onComplete }: TaskCardProps) {
     : format(scheduledAt, 'MMM d · h:mm a');
 
   const isMultiAsset = post.assets.length > 1;
-  const hasVideo = post.assets.some((a) => a.fileType === 'video');
   const firstAsset = post.assets[0];
   const hasRealUrl = firstAsset?.fileUrl?.startsWith('http') || firstAsset?.fileUrl?.startsWith('/');
 
   const handleDownloadAll = useCallback(() => {
-    post.assets.forEach((asset, idx) => {
+    post.assets.forEach((asset) => {
       const filename = buildFilename(post, asset.order, post.assets.length);
       triggerDownload(asset.fileUrl, filename);
     });
@@ -142,18 +158,43 @@ function TaskCard({ post, onComplete }: TaskCardProps) {
     triggerDownload(asset.fileUrl, filename);
   }, [post]);
 
+  // Try to read URL from clipboard. Called both when the confirm panel opens
+  // and when the VA taps the "Read from clipboard" button.
+  const tryReadClipboard = useCallback(async () => {
+    setClipState('reading');
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (text.startsWith('http') && isPlatformUrl(text, post.platform)) {
+        setUrlInput(text);
+        setUrlError('');
+        setClipState('detected');
+      } else if (text.startsWith('http')) {
+        // Valid URL but wrong platform — still fill it, just warn
+        setUrlInput(text);
+        setUrlError(`Heads up: this looks like a different platform's link`);
+        setClipState('not-found');
+      } else {
+        setClipState('not-found');
+      }
+    } catch {
+      // Permission denied or API unavailable
+      setClipState('denied');
+    }
+    setTimeout(() => urlRef.current?.focus(), 50);
+  }, [post.platform]);
+
   const handleMarkPosted = useCallback(() => {
     setShowUrlField(true);
-    setTimeout(() => urlRef.current?.focus(), 50);
-  }, []);
+    // Attempt auto-read immediately on button press
+    tryReadClipboard();
+  }, [tryReadClipboard]);
 
   const handleConfirm = useCallback(() => {
     const url = urlInput.trim();
     if (!url) {
-      setUrlError('Paste the post URL first');
+      setUrlError('Copy the post link first, then tap Read from clipboard');
       return;
     }
-    // Loose URL validation
     if (!url.startsWith('http')) {
       setUrlError('URL should start with https://');
       return;
@@ -321,26 +362,70 @@ function TaskCard({ post, onComplete }: TaskCardProps) {
           </button>
         ) : (
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.06)' }}>
-            <div className="px-3 pt-3 pb-2">
-              <p className="text-xs font-bold text-green-400 mb-2 flex items-center gap-1.5">
+            <div className="px-3 pt-3 pb-2 space-y-2">
+
+              {/* Instruction */}
+              <p className="text-xs font-bold text-green-400 flex items-center gap-1.5">
                 <Link className="w-3.5 h-3.5" />
-                Paste the live post URL
+                {clipState === 'detected'
+                  ? 'Link detected from clipboard ✓'
+                  : clipState === 'reading'
+                  ? 'Reading clipboard…'
+                  : 'Copy the post link, then tap below'}
               </p>
-              <input
-                ref={urlRef}
-                type="url"
-                value={urlInput}
-                onChange={(e) => { setUrlInput(e.target.value); setUrlError(''); }}
-                onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
-                placeholder="https://www.instagram.com/p/..."
-                className="w-full text-sm text-white rounded-lg px-3 py-2 focus:outline-none"
-                style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${urlError ? 'rgba(239,68,68,0.5)' : 'rgba(34,197,94,0.25)'}` }}
-              />
-              {urlError && <p className="text-[11px] text-red-400 mt-1">{urlError}</p>}
+
+              {/* Auto-read button */}
+              {clipState !== 'detected' && (
+                <button
+                  onClick={tryReadClipboard}
+                  disabled={clipState === 'reading'}
+                  className={clsx(
+                    'w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all active:scale-95',
+                    clipState === 'reading'
+                      ? 'opacity-50 cursor-not-allowed text-zinc-400'
+                      : 'text-white'
+                  )}
+                  style={{ background: 'rgba(124,58,237,0.25)', border: '1px solid rgba(124,58,237,0.35)' }}
+                >
+                  {clipState === 'reading'
+                    ? <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    : <Clipboard className="w-4 h-4" />}
+                  {clipState === 'denied' ? 'Paste manually below' : 'Read from clipboard'}
+                </button>
+              )}
+
+              {/* Detected URL preview or manual input */}
+              {clipState === 'detected' ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                  style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.25)' }}>
+                  <CheckCheck className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span className="text-xs text-green-300 truncate flex-1">{urlInput}</span>
+                  <button
+                    onClick={() => { setClipState('not-found'); setUrlInput(''); }}
+                    className="text-[10px] text-zinc-500 hover:text-zinc-300 flex-shrink-0"
+                  >
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <input
+                  ref={urlRef}
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => { setUrlInput(e.target.value); setUrlError(''); }}
+                  onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
+                  placeholder="Or paste the URL manually…"
+                  className="w-full text-sm text-white rounded-lg px-3 py-2 focus:outline-none"
+                  style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${urlError ? 'rgba(239,68,68,0.5)' : 'rgba(34,197,94,0.25)'}` }}
+                />
+              )}
+
+              {urlError && <p className="text-[11px] text-amber-400">{urlError}</p>}
             </div>
+
             <div className="flex gap-2 px-3 pb-3">
               <button
-                onClick={() => { setShowUrlField(false); setUrlInput(''); setUrlError(''); }}
+                onClick={() => { setShowUrlField(false); setUrlInput(''); setUrlError(''); setClipState('idle'); }}
                 className="flex-1 py-2 text-xs font-semibold text-zinc-400 rounded-lg transition-colors hover:text-white"
                 style={{ background: 'rgba(255,255,255,0.05)' }}
               >
