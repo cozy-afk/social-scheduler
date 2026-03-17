@@ -309,6 +309,8 @@ export default function GalleryPage() {
   const approvedIds = new Set(approvedAssetIds);
   const [assetFilter, setAssetFilter] = useState<'all' | 'image' | 'video'>('all');
   const [search, setSearch] = useState('');
+  const [pageSize, setPageSize] = useState<20 | 50 | 100>(50);
+  const [page, setPage] = useState(1);
   const [previewVideo, setPreviewVideo] = useState<GalleryAsset | null>(null);
   const [showFeedPreview, setShowFeedPreview] = useState(false);
   const [thumbSize, setThumbSize] = useState(3);
@@ -343,6 +345,7 @@ export default function GalleryPage() {
     clearApprovals();
     setR2Error(null);
     setR2Refreshing(false); // clear any in-flight refresh indicator from previous model
+    setPage(1);
 
     const cached = getCachedAssets(selectedModel.id);
 
@@ -586,34 +589,43 @@ export default function GalleryPage() {
     }
   }, [showVirality, galleryAssets, analyzeAllVirality]);
 
-  const filtered = useMemo(() => galleryAssets.filter((a) => {
-    if (assetFilter === 'image' && a.fileType !== 'image') return false;
-    if (assetFilter === 'video' && a.fileType !== 'video') return false;
-    if (search) {
-      const term = search.toLowerCase();
-      const dateStr = a.uploadedAt
-        ? new Date(a.uploadedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).toLowerCase()
-        : '';
-      const matches =
-        a.fileName.toLowerCase().includes(term) ||
-        a.fileType.toLowerCase().includes(term) ||
-        formatRatio(a.aspectRatio).toLowerCase().includes(term) ||
-        dateStr.includes(term);
-      if (!matches) return false;
-    }
-    return true;
-  }), [galleryAssets, assetFilter, search]);
+  const filtered = useMemo(() => {
+    setPage(1); // reset to first page whenever the filter set changes
+    return galleryAssets.filter((a) => {
+      if (assetFilter === 'image' && a.fileType !== 'image') return false;
+      if (assetFilter === 'video' && a.fileType !== 'video') return false;
+      if (search) {
+        const term = search.toLowerCase();
+        const dateStr = a.uploadedAt
+          ? new Date(a.uploadedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).toLowerCase()
+          : '';
+        const matches =
+          a.fileName.toLowerCase().includes(term) ||
+          a.fileType.toLowerCase().includes(term) ||
+          formatRatio(a.aspectRatio).toLowerCase().includes(term) ||
+          dateStr.includes(term);
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [galleryAssets, assetFilter, search]);
 
-  // Auto-trigger virality analysis for visible images
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize],
+  );
+
+  // Auto-trigger virality analysis for images on the current page
   useEffect(() => {
     if (showVirality) {
-      filtered.slice(0, 12).forEach((asset) => {
+      paginated.forEach((asset) => {
         if (asset.fileType === 'image' && !viralityCache.has(asset.id)) {
           analyzeVirality(asset);
         }
       });
     }
-  }, [filtered, showVirality, viralityCache, analyzeVirality]);
+  }, [paginated, showVirality, viralityCache, analyzeVirality]);
 
   const imageCount = galleryAssets.filter((a) => a.fileType === 'image').length;
   const videoCount = galleryAssets.filter((a) => a.fileType === 'video').length;
@@ -638,7 +650,8 @@ export default function GalleryPage() {
               <div>
                 <h2 className="text-xl font-bold text-white">Content Gallery</h2>
                 <p className="text-sm text-slate-400 mt-0.5">
-                  {galleryAssets.length} assets · {imageCount} images · {videoCount} videos
+                  {filtered.length} assets · {imageCount} images · {videoCount} videos
+                  {filtered.length !== galleryAssets.length && <span className="text-slate-500 ml-1">(filtered from {galleryAssets.length})</span>}
                   {postedCount > 0 && <span className="text-emerald-400 ml-2">· {postedCount} already posted</span>}
                 </p>
               </div>
@@ -816,7 +829,7 @@ export default function GalleryPage() {
                 thumbSize === 5 ? 'grid-cols-3 sm:grid-cols-5 md:grid-cols-6' :
                                   'grid-cols-4 sm:grid-cols-6 md:grid-cols-8'
               }`}>
-                {filtered.map((asset) => (
+                {paginated.map((asset) => (
                   <AssetThumbnail
                     key={asset.id}
                     asset={asset}
@@ -847,7 +860,7 @@ export default function GalleryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((asset) => {
+                    {paginated.map((asset) => {
                       const isSelected = selectedIds.has(asset.id);
                       const isPostedAsset = postedUrlSet.has(asset.fileUrl);
                       const uploadedLabel = asset.uploadedAt
@@ -966,6 +979,76 @@ export default function GalleryPage() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* ── Pagination ── */}
+            {filtered.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                {/* Page-size picker */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-slate-500">Show</span>
+                  {([20, 50, 100] as const).map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => { setPageSize(n); setPage(1); }}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                        pageSize === n
+                          ? 'bg-violet-600 text-white'
+                          : 'text-slate-400 hover:text-slate-200 bg-slate-800 border border-slate-700'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <span className="text-xs text-slate-500">per page</span>
+                </div>
+
+                {/* Page info + prev/next */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">
+                    {((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    ← Prev
+                  </button>
+                  {/* Page numbers — show at most 7 buttons */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                    .reduce<(number | '…')[]>((acc, p, i, arr) => {
+                      if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push('…');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, i) =>
+                      p === '…' ? (
+                        <span key={`ellipsis-${i}`} className="text-xs text-slate-600 px-1">…</span>
+                      ) : (
+                        <button
+                          key={p}
+                          onClick={() => setPage(p as number)}
+                          className={`w-7 h-7 rounded-lg text-xs font-medium transition-all ${
+                            page === p
+                              ? 'bg-violet-600 text-white'
+                              : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      )
+                    )}
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Next →
+                  </button>
+                </div>
               </div>
             )}
           </div>
