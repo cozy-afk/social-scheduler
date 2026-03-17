@@ -846,19 +846,6 @@ export default function GalleryPage() {
               {selectedIds.size === 0 && filtered.length > 0 && (
                 <button onClick={selectAll} className="btn-secondary text-sm">Select All</button>
               )}
-              {/* Approve all selected shortcut */}
-              {selectedIds.size > 0 && (
-                <button
-                  onClick={() => {
-                    selectedIds.forEach((id) => approveAsset(id));
-                    clearSelection();
-                  }}
-                  className="btn-secondary text-sm flex items-center gap-1.5"
-                >
-                  <ThumbsUp className="w-4 h-4 text-green-400" />
-                  Approve {selectedIds.size}
-                </button>
-              )}
               {/* Thumb size slider — only relevant in grid view */}
               {viewMode === 'grid' && (
                 <div className="flex items-center gap-1.5 flex-shrink-0">

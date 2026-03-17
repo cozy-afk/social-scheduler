@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   X, Check, Sun, Crop, Type, Smile, Wand2, Trash2,
   Bold, AlignCenter, ChevronLeft, ChevronRight, RotateCcw,
-  Minus, Plus, Sparkles,
+  Minus, Plus, Sparkles, HelpCircle,
 } from 'lucide-react';
 import { INSTAGRAM_FILTERS } from '@/lib/instagram-filters';
 import type { CropRatio } from '@/types/models';
@@ -50,7 +50,7 @@ export interface ImageEditorResult {
   overlays: OverlayItem[];
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────
 
 const DEFAULT_FILTERS: FilterState = {
   namedFilter: '',
@@ -92,7 +92,7 @@ const EMOJIS: Record<string, string[]> = {
   '💼 Promo': ['📸','📱','💻','🖥️','🎬','🎥','📽️','🎞️','📺','📻','🎙️','🎚️','🎛️','💡','🔆','📢','📣','🔊','🗣️','💬','💭','🔔'],
 };
 
-// ─── Filter CSS string ────────────────────────────────────────────────────────
+// ─── Filter CSS string ────────────────────────────────────────────────
 
 function filtersToCSS(f: FilterState): string {
   const named = INSTAGRAM_FILTERS.find((x) => x.name === f.namedFilter)?.css || '';
@@ -107,23 +107,26 @@ function filtersToCSS(f: FilterState): string {
   return [named, manual].filter(Boolean).join(' ');
 }
 
-// ─── Slider row component ─────────────────────────────────────────────────────
+// ─── Slider row component ─────────────────────────────────────────────
 
-function SliderRow({ label, value, min, max, step = 1, onChange, unit = '' }: {
+function SliderRow({ label, value, min, max, step =1, onChange, unit = '' }: {
   label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; unit?: string;
 }) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-slate-400">{label}</span>
-        <span className="text-slate-300 font-mono w-10 text-right">{value > 0 && unit === '+' ? '+' : ''}{value}{unit !== '+' ? unit : ''}</span>
+        <span className="text-white/70">{label}</span>
+        <span className="text-white font-mono w-10 text-right">{value > 0 && unit === '+' ? '+' : ''}{value}{unit !== '+' ? unit : ''}</span>
       </div>
       <input
         type="range"
         min={min} max={max} step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-blue-500 h-1.5"
+        className="w-full h-1 appearance-none bg-white/20 rounded-full cursor-pointer"
+        style={{
+          background: `linear-gradient(to right, #7c3aed 0%, #7c3aed ${(value - min) / (max - min) * 100}%, #ffffff20 ${(value - min) / (max - min) * 100}%, #ffffff20 100%)`,
+        }}
       />
     </div>
   );
@@ -157,6 +160,7 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ clientX: 0, clientY: 0, ox: 0, oy: 0 });
   const [applying, setApplying] = useState(false);
+  const [adjustTab, setAdjustTab] = useState<'filter' | 'adjust'>('filter');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -351,28 +355,29 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
 
   return (
     <div className="fixed inset-0 bg-black z-[70] flex flex-col" style={{ touchAction: isDragging ? 'none' : 'auto' }}>
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0">
-        <button onClick={onCancel} className="text-slate-400 hover:text-white flex items-center gap-1.5 text-sm transition-colors">
-          <ChevronLeft className="w-5 h-5" />
-          Cancel
+      {/* Top navigation bar */}
+      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 bg-black/80 backdrop-blur-sm">
+        <button onClick={onCancel} className="text-white/70 hover:text-white flex items-center gap-1.5 transition-colors">
+          <X className="w-6 h-6" />
         </button>
-        <h2 className="text-white font-semibold text-sm">Edit Image</h2>
-        <button
-          onClick={handleDone}
-          disabled={applying}
-          className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition-colors disabled:opacity-50"
-        >
-          {applying ? 'Applying…' : 'Done'}
-        </button>
+        <div className="flex items-center gap-4">
+          <HelpCircle className="w-5 h-5 text-white/50" />
+          <button
+            onClick={handleDone}
+            disabled={applying}
+            className="bg-white text-black text-sm font-semibold px-5 py-2 rounded-full transition-all hover:bg-white/90 disabled:opacity-50"
+          >
+            {applying ? 'Saving…' : 'SAVE'}
+          </button>
+        </div>
       </div>
 
-      {/* Image area */}
-      <div className="flex-1 flex items-center justify-center px-4 overflow-hidden">
+      {/* Main content area - image takes full space */}
+      <div className="flex-1 flex items-center justify-center px-4 overflow-hidden bg-black">
         <div
           ref={containerRef}
           className="relative select-none"
-          style={{ maxWidth: '420px', maxHeight: '420px', width: '100%', aspectRatio: '1/1' }}
+          style={{ maxWidth: '600px', maxHeight: '80vh', width: '100%', aspectRatio: '1/1' }}
           onClick={() => setSelectedId(null)}
         >
           {item.type === 'image' ? (
@@ -380,20 +385,20 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
               ref={imgRef}
               src={item.url}
               alt=""
-              className="w-full h-full object-cover rounded-2xl"
+              className="w-full h-full object-contain"
               style={{ filter: previewFilterCSS || 'none', userSelect: 'none', pointerEvents: 'none' }}
               draggable={false}
             />
           ) : (
-            <div className="w-full h-full bg-slate-900 rounded-2xl flex items-center justify-center">
-              <p className="text-slate-400 text-sm">Video preview not available</p>
+            <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+              <p className="text-white/50 text-sm">Video preview not available</p>
             </div>
           )}
 
           {/* Fade overlay */}
           {filters.fade > 0 && (
             <div
-              className="absolute inset-0 rounded-2xl pointer-events-none"
+              className="absolute inset-0 pointer-events-none"
               style={{ backgroundColor: `rgba(255,255,255,${filters.fade / 200})` }}
             />
           )}
@@ -401,7 +406,7 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
           {/* Vignette overlay */}
           {filters.vignette > 0 && (
             <div
-              className="absolute inset-0 rounded-2xl pointer-events-none"
+              className="absolute inset-0 pointer-events-none"
               style={{
                 background: `radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,${filters.vignette / 150}) 100%)`,
               }}
@@ -410,10 +415,10 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
 
           {/* Crop overlay */}
           {tool === 'crop' && cropRatio !== 'free' && (
-            <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
               <div className="absolute inset-0 bg-black/50" />
               <div
-                className="absolute inset-0 m-auto border-2 border-white"
+                className="absolute inset-0 m-auto border-2 border-white/70"
                 style={{
                   ...getCropStyle(),
                   maxWidth: '100%', maxHeight: '100%',
@@ -468,81 +473,154 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
         </div>
       </div>
 
-      {/* Selected overlay controls */}
+      {/* Selected overlay controls - overlay at bottom */}
       {selectedOverlay && (
-        <div className="flex items-center justify-center gap-3 px-4 py-2 border-t border-slate-800 flex-shrink-0">
-          <span className="text-xs text-slate-400">{selectedOverlay.type === 'text' ? 'Text' : 'Emoji'}</span>
-          <button onClick={removeSelected} className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 bg-red-500/15 border border-red-500/30 px-3 py-1.5 rounded-full transition-colors">
-            <Trash2 className="w-3 h-3" /> Remove
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-sm border border-white/10 rounded-2xl px-6 py-3 flex items-center gap-4">
+          <span className="text-xs text-white/70">{selectedOverlay.type === 'text' ? 'Text' : 'Emoji'}</span>
+          <div className="h-4 w-px bg-white/20" />
+          <button onClick={removeSelected} className="flex items-center gap-2 text-xs text-white hover:text-red-400 transition-colors">
+            <Trash2 className="w-4 h-4" /> Remove
           </button>
           {selectedOverlay.type === 'text' && (
             <>
+              <div className="h-4 w-px bg-white/20" />
               <input
                 type="color"
                 value={selectedOverlay.color}
                 onChange={(e) => setOverlays((prev) => prev.map((o) => o.id === selectedId ? { ...o, color: e.target.value } : o))}
-                className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent p-0"
+                className="w-7 h-7 rounded-full cursor-pointer border-2 border-white/20 bg-transparent p-0"
               />
               <button
                 onClick={() => setOverlays((prev) => prev.map((o) => o.id === selectedId ? { ...o, fontSize: Math.max(12, o.fontSize - 4) } : o))}
-                className="btn-ghost p-1.5"
-              ><Minus className="w-3.5 h-3.5" /></button>
+                className="text-white/70 hover:text-white p-1"
+              ><Minus className="w-4 h-4" /></button>
               <span className="text-xs text-white font-mono w-6 text-center">{selectedOverlay.fontSize}</span>
               <button
                 onClick={() => setOverlays((prev) => prev.map((o) => o.id === selectedId ? { ...o, fontSize: Math.min(72, o.fontSize + 4) } : o))}
-                className="btn-ghost p-1.5"
-              ><Plus className="w-3.5 h-3.5" /></button>
+                className="text-white/70 hover:text-white p-1"
+              ><Plus className="w-4 h-4" /></button>
             </>
           )}
         </div>
       )}
 
-      {/* Tool panel */}
-      <div className="bg-slate-950 border-t border-slate-800 flex-shrink-0 max-h-[40vh] overflow-y-auto">
-        {/* Filters */}
+      {/* Bottom control bar - filters/enhance/crop/text/emoji */}
+      <div className="bg-black/95 backdrop-blur-md border-t border-white/10 flex-shrink-0">
+        {/* Filters tab */}
         {tool === 'filters' && (
-          <div className="px-5 py-4 space-y-3">
-            <p className="text-xs text-slate-400 font-medium">Instagram Filters</p>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-              {INSTAGRAM_FILTERS.map((f) => (
-                <button
-                  key={f.name}
-                  onClick={() => setNamedFilter(f.name === 'Normal' ? '' : f.name)}
-                  className={`flex flex-col items-center gap-1 flex-shrink-0 group`}
-                >
-                  <div className={`w-14 h-14 rounded-xl overflow-hidden ring-2 transition-all ${
-                    (f.name === 'Normal' ? namedFilter === '' : namedFilter === f.name)
-                      ? 'ring-blue-500'
-                      : 'ring-transparent group-hover:ring-slate-500'
-                  }`}>
-                    <img
-                      src={item.url}
-                      alt={f.name}
-                      className="w-full h-full object-cover"
-                      style={{ filter: f.css || 'none' }}
-                    />
+          <div className="px-4 py-4">
+            {/* Tab toggle */}
+            <div className="flex items-center gap-1 mb-4">
+              <button
+                onClick={() => setAdjustTab('filter')}
+                className={`flex-1 py-2 text-sm font-semibold transition-all ${adjustTab === 'filter' ? 'text-white' : 'text-white/50'}`}
+              >
+                FILTER
+              </button>
+              <button
+                onClick={() => setAdjustTab('adjust')}
+                className={`flex-1 py-2 text-sm font-semibold transition-all relative ${adjustTab === 'adjust' ? 'text-white' : 'text-white/50'}`}
+              >
+                ADJUST
+                {adjustTab === 'adjust' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-white rounded-full" />}
+              </button>
+            </div>
+
+            {adjustTab === 'filter' && (
+              <>
+                {/* Intensity slider */}
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-xs text-white/70">Intensity</span>
+                  <input
+                    type="range"
+                    min={0} max={100} value={50}
+                    className="flex-1 h-1 appearance-none bg-white/20 rounded-full cursor-pointer"
+                  />
+                  <span className="text-xs text-white font-mono w-8">50</span>
+                </div>
+
+                {/* Filter thumbnails */}
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4">
+                  <button
+                    onClick={() => setNamedFilter('')}
+                    className={`flex flex-col items-center gap-1.5 flex-shrink-0 group transition-all ${namedFilter === '' ? 'ring-2 ring-white/50' : ''}`}
+                  >
+                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-white/10">
+                      <img
+                        src={item.url}
+                        alt="Original"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className={`text-xs ${namedFilter === '' ? 'text-white' : 'text-white/50'}`}>ORIGINAL</span>
+                  </button>
+                  {INSTAGRAM_FILTERS.map((f) => (
+                    <button
+                      key={f.name}
+                      onClick={() => setNamedFilter(f.name)}
+                      className={`flex flex-col items-center gap-1.5 flex-shrink-0 group transition-all ${namedFilter === f.name ? 'ring-2 ring-white/50' : ''}`}
+                    >
+                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-white/10">
+                        <img
+                          src={item.url}
+                          alt={f.name}
+                          className="w-full h-full object-cover"
+                          style={{ filter: f.css || 'none' }}
+                        />
+                      </div>
+                      <span className={`text-xs ${namedFilter === f.name ? 'text-white' : 'text-white/50'}`}>{f.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {adjustTab === 'adjust' && (
+              <div className="space-y-4 max-h-40 overflow-y-auto pb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-white/70 uppercase tracking-wider">Adjustments</span>
+                  <div className="flex gap-2">
+                    <button onClick={autoEnhance} className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 bg-violet-500/20 border border-violet-500/30 px-3 py-1.5 rounded-full transition-colors">
+                      <Wand2 className="w-3 h-3" /> Auto
+                    </button>
+                    <button onClick={resetFilters} className="text-xs text-white/50 hover:text-white px-2 py-1.5 transition-colors">
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <span className={`text-[10px] whitespace-nowrap ${
-                    (f.name === 'Normal' ? namedFilter === '' : namedFilter === f.name)
-                      ? 'text-blue-400 font-semibold'
-                      : 'text-slate-500'
-                  }`}>{f.name}</span>
-                </button>
-              ))}
+                </div>
+                <SliderRow label="Brightness" value={filters.brightness} min={50} max={150} onChange={(v) => setFilters((f) => ({ ...f, brightness: v }))} />
+                <SliderRow label="Contrast" value={filters.contrast} min={50} max={150} onChange={(v) => setFilters((f) => ({ ...f, contrast: v }))} />
+                <SliderRow label="Saturation" value={filters.saturation} min={0} max={200} onChange={(v) => setFilters((f) => ({ ...f, saturation: v }))} />
+                <SliderRow label="Warmth" value={filters.warmth} min={-50} max={50} onChange={(v) => setFilters((f) => ({ ...f, warmth: v }))} unit="+" />
+                <SliderRow label="Vignette" value={filters.vignette} min={0} max={100} onChange={(v) => setFilters((f) => ({ ...f, vignette: v }))} unit="%" />
+                <SliderRow label="Fade" value={filters.fade} min={0} max={100} onChange={(v) => setFilters((f) => ({ ...f, fade: v }))} />
+                <SliderRow label="Sharpen" value={filters.sharpen} min={0} max={100} onChange={(v) => setFilters((f) => ({ ...f, sharpen: v }))} />
+              </div>
+            )}
+
+            {/* Checkmark confirm button */}
+            <div className="flex justify-center mt-4 pt-3 border-t border-white/10">
+              <button
+                onClick={() => setTool('enhance')}
+                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full transition-colors"
+              >
+                <Check className="w-4 h-4" />
+                <span className="text-sm font-medium">Done</span>
+              </button>
             </div>
           </div>
         )}
 
-        {/* Enhance */}
+        {/* Enhance tab */}
         {tool === 'enhance' && (
-          <div className="px-5 py-4 space-y-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Adjustments</span>
+          <div className="px-5 py-5 max-h-50 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-semibold text-white uppercase tracking-wider">Adjustments</span>
               <div className="flex gap-2">
-                <button onClick={autoEnhance} className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 bg-violet-500/15 border border-violet-500/30 px-3 py-1.5 rounded-full transition-colors">
+                <button onClick={autoEnhance} className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 bg-violet-500/20 border border-violet-500/30 px-3 py-1.5 rounded-full transition-colors">
                   <Wand2 className="w-3 h-3" /> Auto Enhance
                 </button>
-                <button onClick={resetFilters} className="text-xs text-slate-400 hover:text-white px-2 py-1.5 transition-colors">
+                <button onClick={resetFilters} className="text-xs text-white/50 hover:text-white px-2 py-1.5 transition-colors">
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -557,21 +635,21 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
           </div>
         )}
 
-        {/* Crop */}
+        {/* Crop tab */}
         {tool === 'crop' && (
-          <div className="px-5 py-4">
-            <p className="text-xs text-slate-400 mb-3">Select aspect ratio. Changes apply when you tap <strong className="text-white">Done</strong>.</p>
-            <div className="flex flex-wrap gap-2">
+          <div className="px-5 py-5">
+            <p className="text-xs text-white/70 mb-4">Select aspect ratio</p>
+            <div className="flex flex-wrap gap-3">
               {CROP_RATIOS.map((r) => {
                 const isLocked = lockedRatio !== undefined && r.value !== lockedRatio && r.value !== 'free';
                 return (
                   <button
                     key={r.value}
                     onClick={() => !isLocked && setCropRatio(r.value)}
-                    className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                    className={`flex-1 min-w-20 px-4 py-3 rounded-xl text-sm font-semibold border transition-all ${
                       cropRatio === r.value
-                        ? 'bg-blue-600 border-blue-500 text-white'
-                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
+                        ? 'bg-white text-black border-white'
+                        : 'bg-white/10 border-white/20 text-white/70 hover:border-white/40'
                     } ${isLocked ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
                   >
                     {r.label}
@@ -580,40 +658,35 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
               })}
             </div>
             {lockedRatio && (
-              <p className="text-[10px] text-slate-500 mt-1">Ratio locked from staging</p>
-            )}
-            {cropRatio !== 'free' && (
-              <p className="text-xs text-blue-400 mt-3">
-                {cropRatio} crop will be applied to the center of the image.
-              </p>
+              <p className="text-[10px] text-white/50 mt-4">Ratio locked from staging</p>
             )}
           </div>
         )}
 
-        {/* Text */}
+        {/* Text tab */}
         {tool === 'text' && (
-          <div className="px-5 py-4 space-y-3">
-            <div className="flex gap-2">
+          <div className="px-5 py-5">
+            <div className="flex gap-2 mb-4">
               <input
                 type="text"
                 value={textInput}
                 onChange={(e) => setTextInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addText()}
                 placeholder="Type your text…"
-                className="input-dark flex-1 text-sm py-2"
+                className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/40"
               />
               <button
                 onClick={addText}
                 disabled={!textInput.trim()}
-                className="btn-primary px-4 text-sm disabled:opacity-40"
+                className="bg-white text-black px-5 py-3 rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Add
               </button>
             </div>
 
             {/* Color row */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] text-slate-500">Color</span>
+            <div className="flex items-center gap-2 flex-wrap mb-4">
+              <span className="text-[10px] text-white/50">Color</span>
               {TEXT_COLORS.map((c) => (
                 <button
                   key={c}
@@ -626,60 +699,61 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
 
             {/* Options row */}
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="text-[10px] text-slate-500">Font</span>
+              <span className="text-[10px] text-white/50">Font</span>
               <select
                 value={fontFamily}
                 onChange={(e) => setFontFamily(e.target.value)}
-                className="bg-slate-800 border border-slate-700 text-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none"
+                className="bg-white/10 border border-white/20 text-white rounded-lg px-3 py-2 text-xs focus:outline-none"
               >
                 {FONT_OPTIONS.map((f) => (
                   <option key={f.value} value={f.value}>{f.label}</option>
                 ))}
               </select>
-              <span className="text-[10px] text-slate-500">Size</span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setFontSize((s) => Math.max(12, s - 4))} className="btn-ghost p-1"><Minus className="w-3.5 h-3.5" /></button>
+              <span className="text-[10px] text-white/50">Size</span>
+              <div className="flex items-center gap-1 bg-white/10 rounded-lg px-2">
+                <button onClick={() => setFontSize((s) => Math.max(12, s - 4))} className="text-white/70 hover:text-white p-1"><Minus className="w-3.5 h-3.5" /></button>
                 <span className="text-xs text-white font-mono w-6 text-center">{fontSize}</span>
-                <button onClick={() => setFontSize((s) => Math.min(72, s + 4))} className="btn-ghost p-1"><Plus className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setFontSize((s) => Math.min(72, s + 4))} className="text-white/70 hover:text-white p-1"><Plus className="w-3.5 h-3.5" /></button>
               </div>
               <button
                 onClick={() => setTextBold((b) => !b)}
-                className={`text-xs px-2.5 py-1 rounded-lg border transition-all font-bold ${textBold ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
+                className={`text-xs px-3 py-2 rounded-lg border transition-all font-bold ${textBold ? 'bg-white text-black' : 'bg-white/10 border-white/20 text-white/70'}`}
               >B</button>
               <button
                 onClick={() => setTextShadow((s) => !s)}
-                className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${textShadow ? 'bg-slate-600 border-slate-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
+                className={`text-xs px-3 py-2 rounded-lg border transition-all ${textShadow ? 'bg-white/10 border-white/20 text-white' : 'bg-white/10 border-white/20 text-white/70'}`}
               >Shadow</button>
             </div>
           </div>
         )}
 
-        {/* Emoji */}
+        {/* Emoji tab */}
         {tool === 'emoji' && (
-          <div className="px-4 py-3 space-y-2">
+          <div className="px-5 py-5">
             {/* Category tabs */}
-            <div className="flex gap-1 overflow-x-auto no-scrollbar pb-1">
+            <div className="flex gap-1 overflow-x-auto pb-2 -mx-5 px-5 mb-3">
               {Object.keys(EMOJIS).map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setEmojiCategory(cat)}
                   className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border transition-all ${
                     emojiCategory === cat
-                      ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'
+                      ? 'bg-white text-black'
+                      : 'bg-white/10 border-white/20 text-white/70 hover:border-white/40'
                   }`}
                 >
                   {cat}
                 </button>
               ))}
             </div>
+
             {/* Emoji grid */}
             <div className="grid grid-cols-11 gap-1">
               {(EMOJIS[emojiCategory] || []).map((emoji) => (
                 <button
                   key={emoji}
                   onClick={() => addEmoji(emoji)}
-                  className="text-2xl p-0.5 hover:scale-125 transition-transform rounded"
+                  className="text-2xl p-1 hover:scale-125 transition-transform rounded"
                 >
                   {emoji}
                 </button>
@@ -687,30 +761,30 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
             </div>
           </div>
         )}
-      </div>
 
-      {/* Bottom toolbar */}
-      <div className="bg-slate-950 border-t border-slate-800 px-4 py-3 flex items-center justify-around flex-shrink-0">
-        {([
-          { id: 'filters', icon: <Sparkles className="w-5 h-5" />, label: 'Filters' },
-          { id: 'crop',    icon: <Crop className="w-5 h-5" />,     label: 'Crop' },
-          { id: 'enhance', icon: <Sun className="w-5 h-5" />,      label: 'Enhance' },
-          { id: 'text',    icon: <Type className="w-5 h-5" />,     label: 'Text' },
-          { id: 'emoji',   icon: <Smile className="w-5 h-5" />,    label: 'Emoji' },
-        ] as const).map(({ id, icon, label }) => (
-          <button
-            key={id}
-            onClick={() => setTool(id)}
-            className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${
-              tool === id
-                ? 'text-blue-400 bg-blue-600/15'
-                : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            {icon}
-            <span className="text-[10px] font-medium">{label}</span>
-          </button>
-        ))}
+        {/* Bottom toolbar */}
+        <div className="border-t border-white/10 px-4 py-3 flex items-center justify-around flex-shrink-0 bg-black/95">
+          {([
+            { id: 'filters', icon: <Sparkles className="w-5 h-5" />, label: 'Filters' },
+            { id: 'crop',    icon: <Crop className="w-5 h-5" />,     label: 'Crop' },
+            { id: 'enhance', icon: <Sun className="w-5 h-5" />,      label: 'Enhance' },
+            { id: 'text',    icon: <Type className="w-5 h-5" />,     label: 'Text' },
+            { id: 'emoji',   icon: <Smile className="w-5 h-5" />,    label: 'Emoji' },
+          ] as const).map(({ id, icon, label }) => (
+            <button
+              key={id}
+              onClick={() => setTool(id)}
+              className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${
+                tool === id
+                  ? 'text-white bg-white/10'
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              {icon}
+              <span className="text-[10px] font-medium">{label}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
