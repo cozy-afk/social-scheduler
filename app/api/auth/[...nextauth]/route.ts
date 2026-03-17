@@ -1,6 +1,5 @@
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import DiscordProvider from 'next-auth/providers/discord';
-import { useStore } from '@/lib/store';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -15,23 +14,12 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
+        // Add user ID from token subject
         session.user.id = token.sub!;
 
-        // Sync user with store (this happens server-side, store is a mock)
-        // In production, this would query the database
-        const user = useStore.getState().users.find(
-          (u) => u.discordId === token.sub || u.email === session.user.email
-        );
-
-        if (user) {
-          session.user.role = user.role;
-          session.user.approvalStatus = user.approvalStatus;
-          session.user.agencyId = user.agencyId;
-        } else {
-          // New user - will be created on first sign in
-          session.user.role = 'agency';
-          session.user.approvalStatus = 'pending';
-        }
+        // Default values for new users (would be updated from database in production)
+        session.user.role = 'agency';
+        session.user.approvalStatus = 'pending';
       }
       return session;
     },
