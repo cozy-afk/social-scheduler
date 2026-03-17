@@ -109,6 +109,12 @@ interface AppState {
   updateResearchGroup: (id: string, updates: Partial<ResearchGroup>) => void;
   deleteResearchGroup: (id: string) => void;
 
+  // Approved assets (persisted across pages)
+  approvedAssetIds: string[];
+  approveAsset: (id: string) => void;
+  unapproveAsset: (id: string) => void;
+  clearApprovals: () => void;
+
   // UI state
   showCreatePostModal: boolean;
   setShowCreatePostModal: (show: boolean) => void;
@@ -272,6 +278,16 @@ export const useStore = create<AppState>((set) => ({
     })),
   deleteResearchGroup: (id) =>
     set((state) => ({ researchGroups: state.researchGroups.filter((g) => g.id !== id) })),
+
+  // Approved assets
+  approvedAssetIds: [],
+  approveAsset: (id) => set((state) => ({
+    approvedAssetIds: state.approvedAssetIds.includes(id) ? state.approvedAssetIds : [...state.approvedAssetIds, id],
+  })),
+  unapproveAsset: (id) => set((state) => ({
+    approvedAssetIds: state.approvedAssetIds.filter((a) => a !== id),
+  })),
+  clearApprovals: () => set({ approvedAssetIds: [] }),
 
   // UI
   showCreatePostModal: false,

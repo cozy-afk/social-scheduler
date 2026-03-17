@@ -588,7 +588,8 @@ export default function GalleryPage() {
   }, [posts]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
+  const { approvedAssetIds, approveAsset, unapproveAsset, clearApprovals } = useStore();
+  const approvedIds = new Set(approvedAssetIds);
   const [filter, setFilter] = useState<'all' | 'image' | 'video'>('all');
   const [search, setSearch] = useState('');
   const [showFeedPreview, setShowFeedPreview] = useState(false);
@@ -639,11 +640,7 @@ export default function GalleryPage() {
 
   const toggleApprove = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    setApprovedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    approvedIds.has(id) ? unapproveAsset(id) : approveAsset(id);
   };
 
   const handleScheduleApproved = () => {
@@ -652,7 +649,6 @@ export default function GalleryPage() {
     setStagedAssets(approved);
     // Override workflowStep to skip staging and go straight to scheduling
     setWorkflowStep('scheduling');
-    setApprovedIds(new Set());
   };
 
   const handleEditVariant = useCallback((assetId: string, ratio: CropRatio) => {
@@ -818,11 +814,7 @@ export default function GalleryPage() {
               {selectedIds.size > 0 && (
                 <button
                   onClick={() => {
-                    setApprovedIds((prev) => {
-                      const next = new Set(prev);
-                      selectedIds.forEach((id) => next.add(id));
-                      return next;
-                    });
+                    selectedIds.forEach((id) => approveAsset(id));
                     clearSelection();
                   }}
                   className="btn-secondary text-sm flex items-center gap-1.5"
@@ -1002,7 +994,7 @@ export default function GalleryPage() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setApprovedIds(new Set())}
+                  onClick={() => clearApprovals()}
                   className="btn-ghost text-xs px-3 py-1.5"
                 >
                   Clear
