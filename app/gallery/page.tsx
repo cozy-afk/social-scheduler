@@ -50,7 +50,57 @@ interface IGPost {
   caption?: string;
 }
 
-// ─── Asset Thumbnail ──────────────────────────────────────────────────────────
+// ─── Video Thumbnail (lazy, intersection-based) ───────────────────────────────
+
+/**
+ * Renders a video first-frame preview.
+ * The <video> element is only created once the thumbnail scrolls into the viewport,
+ * so we never load video data for off-screen cells.
+ */
+function VideoThumbnail({ src, fileName }: { src: string; fileName: string }) {
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setShouldLoad(true); observer.disconnect(); } },
+      { rootMargin: '300px' } // start loading 300px before visible
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef} className="w-full h-full relative bg-slate-800">
+      {shouldLoad && (
+        <video
+          src={src}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          preload="metadata"
+          muted
+          playsInline
+          onLoadedData={() => setLoaded(true)}
+        />
+      )}
+      {!loaded && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-2">
+          <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+            {shouldLoad
+              ? <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+              : <Film className="w-5 h-5 text-slate-300" />
+            }
+          </div>
+          <p className="text-[10px] text-slate-500 text-center truncate w-full px-1 leading-tight">
+            {fileName}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Video Lightbox ───────────────────────────────────────────────────────────
 
@@ -125,20 +175,9 @@ function AssetThumbnail({
     >
       <div className="w-full h-full bg-slate-800 flex items-center justify-center">
         {asset.fileType === 'video' ? (
-          // Never preload video data for thumbnails — show static placeholder instead.
-          // The actual video only loads when the user opens the lightbox.
-          asset.thumbnailUrl ? (
-            <img src={asset.thumbnailUrl} alt={asset.fileName} loading="lazy" decoding="async" className="w-full h-full object-cover" />
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-2 w-full h-full p-2">
-              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                <Film className="w-5 h-5 text-slate-300" />
-              </div>
-              <p className="text-[10px] text-slate-500 text-center truncate w-full px-1 leading-tight">
-                {asset.fileName}
-              </p>
-            </div>
-          )
+          // VideoThumbnail loads the video lazily via IntersectionObserver,
+          // only fetching metadata (first frame) once the cell is near the viewport.
+          <VideoThumbnail src={asset.fileUrl} fileName={asset.fileName} />
         ) : asset.fileUrl ? (
           <img src={asset.fileUrl} alt={asset.fileName} loading="lazy" decoding="async" className="w-full h-full object-cover" />
         ) : (
