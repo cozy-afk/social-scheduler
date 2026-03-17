@@ -2,9 +2,9 @@
 
 import { useStore } from '@/lib/store';
 import { useState, useMemo, useCallback } from 'react';
-import { format, eachDayOfInterval, isToday, addDays, addWeeks, addMonths, subDays, subWeeks, subMonths, isSameMonth, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachMinuteOfInterval, setMinutes, setHours, isSameDay, parseISO } from 'date-fns';
+import { format, eachDayOfInterval, isToday, addDays, addWeeks, addMonths, subDays, subWeeks, subMonths, isSameMonth, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, Eye, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Post, Model, TimeSlot } from '@/types/models';
+import { Post, Model, TimeSlot, Platform } from '@/types/models';
 import FeedPreviewModal from './FeedPreviewModal';
 import { PLATFORM_THEMES, POST_TYPE_CONFIGS, getPostTypeColor } from '@/lib/constants/platform';
 import { getSlotStatus, isRealUrl, calculateTodayStats, getDayPosts, getDayMissingCount } from '@/lib/utils/posts';

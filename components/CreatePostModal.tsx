@@ -251,6 +251,7 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
     tiktok:    { scheduledTime: '', description: '', enabled: false },
     threads:   { scheduledTime: '', description: '', enabled: false },
     x:         { scheduledTime: '', description: '', enabled: false },
+    fanvue:    { scheduledTime: '', description: '', enabled: false },
   });
   const [uploading, setUploading] = useState(false);
   const [scheduling, setScheduling] = useState(false);
@@ -258,6 +259,17 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
   const [showLibrary, setShowLibrary] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
 
   // Initialize from editing post
   useEffect(() => {
@@ -308,6 +320,11 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
           description: editingPost.description,
           enabled: editingPost.platform === 'x',
         },
+        fanvue: {
+          scheduledTime: '',
+          description: '',
+          enabled: false,
+        },
       });
     }
   }, [editingPost]);
@@ -354,9 +371,13 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
         if (!isVideo) {
           const img = new Image();
           img.onload = () => {
-            const arCheck = checkImageAspectRatios(img.width, img.height, format);
-            if (!arCheck.valid) {
-              newArChecks[mediaItems.length + newItems.length] = arCheck;
+            try {
+              const arCheck = checkImageAspectRatios(img.width, img.height, format);
+              if (!arCheck.valid) {
+                newArChecks[mediaItems.length + newItems.length] = arCheck;
+              }
+            } catch (error) {
+              console.error('AR check failed:', error);
             }
             setArCheckResults((prev) => ({ ...prev, ...newArChecks }));
           };
@@ -460,8 +481,27 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
   const igPostType = FORMAT_TO_IG_POST_TYPE[format];
   const relevantCaptions = useMemo(() => captions.filter((c) => c.postType === igPostType), [captions, igPostType]);
 
+  // Close on Escape key
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  }, [onClose]);
+
+  // Close when clicking backdrop
+  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={handleBackdropClick}
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+    >
       <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">

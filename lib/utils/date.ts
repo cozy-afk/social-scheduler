@@ -1,5 +1,5 @@
-import { format, addDays, addWeeks, addMonths, subDays, subWeeks, subMonths, startOfWeek, endOfWeek } from 'date-fns';
-import { CalendarViewType } from '@/types';
+import { format, addDays, addWeeks, addMonths, subDays, subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { CalendarViewType } from '@/components/CalendarView';
 
 // ─── Date Navigation ───────────────────────────────────────────────────────────
 
