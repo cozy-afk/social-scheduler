@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useStore, getVisibleModels } from '@/lib/store';
-import { mockModels, mockAdmin, mockGalleryAssets } from '@/lib/mockData';
+import { mockModels, mockAdmin } from '@/lib/mockData';
+import { AuthGuard } from '@/components/AuthGuard';
 import CreatePostModal from '@/components/CreatePostModal';
 import StagingView from '@/components/StagingView';
 import ImageEditor, { EditableImage, ImageEditorResult } from '@/components/ImageEditor';
@@ -15,6 +16,8 @@ import {
   Eye, Loader2, RefreshCw, Heart, MessageCircle, Bookmark,
   Send, Play, Music2, Layers,
   Grid3X3, List, Rows3, CheckCheck, ThumbsUp, CalendarCheck,
+  Clapperboard, BookMarked, UserCheck, ArrowLeft, MoreHorizontal,
+  Share2, ChevronRight, Plus, Wifi, Signal, Battery,
 } from 'lucide-react';
 import { InstagramIcon, TikTokIcon } from '@/components/PlatformIcons';
 
@@ -155,311 +158,281 @@ function AssetThumbnail({
   );
 }
 
-// ─── Instagram Feed Preview ──────────────────────────────────────────────────
+// ─── Phone Frame (shared) ───────────────────────────────────────────────
 
-function InstagramFeedPreview({
-  modelName,
-  modelEmoji,
-  scheduledPosts,
-  fetchedPosts,
-}: {
-  modelName: string;
-  modelEmoji: string;
-  scheduledPosts: GalleryAsset[];
-  fetchedPosts: IGPost[];
-}) {
-  const handle = modelName.toLowerCase().replace(/\s/g, '_');
-  // Build a 3-col grid: scheduled first (with NEW badge), then fetched from API, then placeholders
-  const totalSlots = 12;
-  const scheduled = scheduledPosts.slice(0, 6);
-  const fetched = fetchedPosts.slice(0, totalSlots - scheduled.length);
-  const placeholders = Math.max(0, totalSlots - scheduled.length - fetched.length);
-
+function PhoneFrame({ children, dark = false }: { children: React.ReactNode; dark?: boolean }) {
   return (
-    <div className="bg-black rounded-2xl overflow-hidden border border-slate-700 w-full max-w-sm mx-auto">
+    <div
+      className="relative flex-shrink-0 overflow-hidden rounded-[44px]"
+      style={{
+        width: 320,
+        height: 640,
+        background: dark ? '#000' : '#fff',
+        border: '6px solid #1a1a1a',
+        boxShadow: '0 0 0 1px #333, 0 20px 50px rgba(0,0,0,0.5)',
+      }}
+    >
+      {/* Notch */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-6 rounded-b-2xl z-10" style={{ background: '#1a1a1a' }} />
       {/* Status bar */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-1">
-        <span className="text-white text-[11px] font-semibold">9:41</span>
+      <div className="absolute top-0 left-0 right-0 h-7 flex items-end justify-between px-5 pb-1 z-20">
+        <span className="text-[9px] font-bold" style={{ color: dark ? '#fff' : '#000' }}>9:41</span>
         <div className="flex items-center gap-1">
-          <div className="flex gap-0.5 items-end">
-            {[2, 3, 4, 4].map((h, i) => (
-              <div key={i} style={{ height: h * 3 + 'px' }} className="w-1 bg-white rounded-sm" />
-            ))}
-          </div>
-          <svg className="w-4 h-3 text-white" fill="currentColor" viewBox="0 0 24 16">
-            <path d="M1 1h22v14H1z" fill="none" stroke="currentColor" strokeWidth="1.5" rx="2" />
-            <path d="M23 5v6a3 3 0 000-6z" />
-            <rect x="2.5" y="2.5" width="17" height="11" rx="1" />
+          <svg width="12" height="7" viewBox="0 0 12 7" fill="currentColor" style={{ color: dark ? '#fff' : '#000' }} className="opacity-90">
+            <rect x="0" y="3" width="3" height="4" rx="0.5" />
+            <rect x="4.5" y="1.5" width="3" height="5.5" rx="0.5" />
+            <rect x="9" y="0" width="3" height="7" rx="0.5" />
+          </svg>
+          <svg width="11" height="7" viewBox="0 0 11 7" fill="currentColor" style={{ color: dark ? '#fff' : '#000' }} className="opacity-90">
+            <path d="M3 6a4.24 4.24 0 0 1 6 0" strokeWidth="0.8" stroke="currentColor" fill="none" strokeLinecap="round" />
+            <path d="M1 3.5A7.5 7.5 0 0 1 8.5 3.5" strokeWidth="0.8" stroke="currentColor" fill="none" strokeLinecap="round" />
+          </svg>
+          <svg width="20" height="10" viewBox="0 0 20 10" fill="none" style={{ color: dark ? '#fff' : '#000' }} className="opacity-90">
+            <rect x="0.5" y="0.5" width="16" height="9" rx="2.5" stroke="currentColor" strokeOpacity="0.45" />
+            <rect x="1.5" y="1.5" width="13" height="7" rx="1.5" fill="currentColor" />
+            <path d="M17 4v3" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeOpacity="0.5" />
           </svg>
         </div>
       </div>
+      {/* Screen content */}
+      <div className="absolute inset-0 top-7 overflow-y-auto no-scrollbar" style={{ borderRadius: 38 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
-      {/* IG header */}
-      <div className="flex items-center justify-between px-4 py-2">
-        <svg viewBox="0 0 107 30" className="h-7 fill-white">
-          <path d="M8.5 0C3.8 0 0 3.8 0 8.5v13C0 26.2 3.8 30 8.5 30h13C26.2 30 30 26.2 30 21.5v-13C30 3.8 26.2 0 21.5 0H8.5zm0 2h13c3.6 0 6.5 2.9 6.5 6.5v13c0 3.6-2.9 6.5-6.5 6.5h-13C4.9 28 2 25.1 2 21.5v-13C2 4.9 4.9 2 8.5 2z" />
-        </svg>
-        <div className="flex items-center gap-4">
-          <Heart className="w-6 h-6 text-white" />
-          <MessageCircle className="w-6 h-6 text-white" />
+// ─── Instagram Profile View ───────────────────────────────────────────────
+
+function IGProfilePreview({ modelName, selectedAssets }: { modelName: string; selectedAssets: GalleryAsset[] }) {
+  const [activeTab, setActiveTab] = useState<'grid' | 'reels' | 'tagged'>('grid');
+  const handle = modelName.toLowerCase().replace(/\s+/g, '_');
+
+  return (
+    <div className="flex flex-col" style={{ background: '#fff', minHeight: '100%' }}>
+      {/* Nav bar */}
+      <div className="flex items-center justify-between px-4 py-3 sticky top-0 z-10" style={{ background: '#fff', borderBottom: '0.5px solid #dbdbdb' }}>
+        <div className="w-5" />
+        <span className="text-[13px] font-bold text-black">{handle}</span>
+        <div className="flex items-center gap-3">
+          <Plus className="w-5 h-5 text-black" />
+          <MoreHorizontal className="w-5 h-5 text-black" />
         </div>
       </div>
 
-      {/* Stories row */}
-      <div className="px-2 py-2">
-        <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
-          {[
-            { label: 'Your story', isAdd: true },
-            { label: 'lifestyle', isAdd: false },
-            { label: 'travel', isAdd: false },
-            { label: 'gym', isAdd: false },
-            { label: 'food', isAdd: false },
-          ].map(({ label, isAdd }) => (
-            <div key={label} className="flex flex-col items-center gap-1 flex-shrink-0">
-              <div className={`w-14 h-14 rounded-full ${isAdd ? 'bg-slate-800 border-2 border-dashed border-slate-500' : 'p-0.5 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600'}`}>
-                <div className={`w-full h-full rounded-full bg-slate-900 flex items-center justify-center ${!isAdd ? 'border-2 border-black' : ''}`}>
-                  {isAdd ? (
-                    <span className="text-slate-400 text-xl leading-none">+</span>
-                  ) : (
-                    <span className="text-base">{modelEmoji}</span>
-                  )}
+      {/* Profile header */}
+      <div className="px-4 pt-3 pb-2">
+        {/* Avatar + stats row */}
+        <div className="flex items-center gap-4 mb-3">
+          {/* Avatar with story ring */}
+          <div className="relative flex-shrink-0">
+            <div className="w-16 h-16 rounded-full p-[2.5px]"
+              style={{ background: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)' }}>
+              <div className="w-full h-full rounded-full overflow-hidden" style={{ background: '#ddd' }}>
+                <div className="w-full h-full bg-gradient-to-br from-violet-400 to-pink-400 flex items-center justify-center text-xl text-white font-bold">
+                  {modelName[0]}
                 </div>
               </div>
-              <span className="text-white text-[10px] truncate w-14 text-center">{label}</span>
+            </div>
+          </div>
+          {/* Stats */}
+          <div className="flex-1 grid grid-cols-3 text-center">
+            {[
+              { label: 'Posts', val: String(selectedAssets.length) },
+              { label: 'Followers', val: '47.2K' },
+              { label: 'Following', val: '312' },
+            ].map(({ label, val }) => (
+              <div key={label}>
+                <p className="text-[13px] font-bold text-black leading-tight">{val}</p>
+                <p className="text-[10px] text-black">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bio */}
+        <p className="text-[11px] font-bold text-black leading-tight">{modelName}</p>
+        <p className="text-[10px] text-black mt-0.5 leading-snug">
+          ✨ Content creator · Link in bio 🔗
+        </p>
+
+        {/* Action buttons */}
+        <div className="flex gap-2 mt-2.5">
+          <button className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold text-black"
+            style={{ background: '#efefef' }}>Edit profile</button>
+          <button className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold text-black"
+            style={{ background: '#efefef' }}>Share profile</button>
+          <button className="w-8 h-7 rounded-lg flex items-center justify-center" style={{ background: '#efefef' }}>
+            <UserCheck className="w-3.5 h-3.5 text-black" />
+          </button>
+        </div>
+      </div>
+
+      {/* Story highlights */}
+      <div className="px-4 py-2">
+        <div className="flex gap-3 overflow-x-auto no-scrollbar">
+          {['New✨', 'Gym', 'Travel', 'BTS', 'Faves'].map((name) => (
+            <div key={name} className="flex flex-col items-center gap-1 flex-shrink-0">
+              <div className="w-11 h-11 rounded-full p-[1.5px]" style={{ background: '#dbdbdb' }}>
+                <div className="w-full h-full rounded-full overflow-hidden">
+                  <div className="w-full h-full bg-gradient-to-br from-pink-300 to-purple-400" />
+                </div>
+              </div>
+              <span className="text-[9px] text-black text-center max-w-[44px] truncate">{name}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="border-t border-slate-800" />
-
-      {/* Profile header */}
-      <div className="px-3 py-3 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center text-base">
-          {modelEmoji}
-        </div>
-        <div className="flex-1">
-          <p className="text-white text-xs font-semibold">{handle}</p>
-          <div className="flex items-center gap-1">
-            <span className="text-slate-400 text-[10px]">24.5K followers</span>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <span className="bg-slate-800 border border-slate-600 text-white text-[10px] px-2.5 py-1 rounded-lg font-medium">Follow</span>
-          <span className="w-5 h-5 text-slate-400 flex items-center justify-center text-xs">•••</span>
-        </div>
-      </div>
-
-      {/* Post count & tab bar */}
-      <div className="flex border-b border-slate-800">
-        {['grid', 'reels', 'tags'].map((tab, i) => (
-          <button key={tab} className={`flex-1 py-2.5 flex items-center justify-center ${i === 0 ? 'border-b-2 border-white' : ''}`}>
-            {tab === 'grid' ? (
-              <div className="grid grid-cols-2 gap-0.5 w-4 h-4">
-                {[...Array(4)].map((_, j) => <div key={j} className={`rounded-sm ${i === 0 ? 'bg-white' : 'bg-slate-500'}`} />)}
-              </div>
-            ) : tab === 'reels' ? (
-              <Play className={`w-4 h-4 ${i === 0 ? 'text-white' : 'text-slate-500'}`} />
-            ) : (
-              <svg viewBox="0 0 24 24" className={`w-4 h-4 ${i === 0 ? 'fill-white' : 'fill-slate-500'}`}>
-                <path d="M20 4H4a1 1 0 00-1 1v1.5A.5.5 0 003.5 7H4v12a1 1 0 001 1h14a1 1 0 001-1V7h.5a.5.5 0 00.5-.5V5a1 1 0 00-1-1z" />
-              </svg>
-            )}
+      {/* Tab bar */}
+      <div className="flex" style={{ borderTop: '0.5px solid #dbdbdb', borderBottom: '0.5px solid #dbdbdb' }}>
+        {[
+          { id: 'grid', Icon: Grid3X3 },
+          { id: 'reels', Icon: Clapperboard },
+          { id: 'tagged', Icon: BookMarked },
+        ].map(({ id, Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id as typeof activeTab)}
+            className="flex-1 py-2.5 flex items-center justify-center"
+            style={{ borderBottom: activeTab === id ? '1px solid #000' : '1px solid transparent' }}
+          >
+            <Icon className="w-4.5 h-4.5" style={{ width: 18, height: 18, color: activeTab === id ? '#000' : '#8e8e8e' }} />
           </button>
         ))}
       </div>
 
-      {/* 3-column grid */}
-      <div className="grid grid-cols-3 gap-px bg-slate-800">
-        {scheduled.map((asset, i) => (
-          <div key={asset.id} className="relative aspect-square bg-slate-900 overflow-hidden">
-            <div className="w-full h-full bg-slate-700 flex items-center justify-center">
-              {asset.fileType === 'video' ? (
-                <Film className="w-5 h-5 text-slate-500" />
-              ) : (
-                <ImageIcon className="w-5 h-5 text-slate-500" />
-              )}
-            </div>
-            <div className="absolute inset-0 bg-blue-500/20" />
-            <span className="absolute top-1 left-1 bg-violet-500 text-white text-[8px] px-1 py-0.5 rounded font-bold">NEW</span>
-            {asset.fileType === 'video' && (
-              <Play className="absolute bottom-1 right-1 w-3 h-3 text-white" />
-            )}
-          </div>
-        ))}
-
-        {fetched.map((post) => (
-          <div key={post.id} className="relative aspect-square bg-slate-900 overflow-hidden">
-            {post.media_url || post.thumbnail_url ? (
-              <img
-                src={post.thumbnail_url || post.media_url}
-                alt=""
-                className="w-full h-full object-cover"
-              />
+      {/* Photo grid */}
+      <div className="grid grid-cols-3" style={{ gap: 1.5 }}>
+        {selectedAssets.length > 0 ? selectedAssets.map((asset, idx) => (
+          <div key={asset.id} className="relative aspect-square overflow-hidden" style={{ background: '#e5e5e5' }}>
+            {asset.fileUrl ? (
+              <img src={asset.fileUrl} alt="" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-                <ImageIcon className="w-5 h-5 text-slate-600" />
+              <div className="w-full h-full flex items-center justify-center">
+                {asset.fileType === 'video' ? (
+                  <Film className="w-8 h-8 text-slate-500" />
+                ) : (
+                  <ImageIcon className="w-8 h-8 text-slate-500" />
+                )}
               </div>
             )}
-            {post.media_type === 'VIDEO' && (
-              <Play className="absolute bottom-1 right-1 w-3 h-3 text-white drop-shadow" />
+            {/* NEW badge */}
+            <div className="absolute top-1 left-1">
+              <span className="bg-green-500 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold leading-none">NEW</span>
+            </div>
+            {/* Play indicator for videos */}
+            {asset.fileType === 'video' && (
+              <Play className="absolute bottom-1 right-1 w-4 h-4 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }} />
             )}
           </div>
-        ))}
-
-        {Array.from({ length: placeholders }).map((_, i) => (
-          <div key={`ph-${i}`} className="aspect-square bg-slate-900/60 flex items-center justify-center">
-            <ImageIcon className="w-4 h-4 text-slate-700" />
+        )) : (
+          <div className="col-span-3 py-12 text-center" style={{ background: '#fafafa' }}>
+            <ImageIcon className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+            <p className="text-slate-500 text-sm">Select assets to preview</p>
           </div>
-        ))}
-      </div>
-
-      {/* Bottom nav */}
-      <div className="flex items-center justify-around px-2 py-3 border-t border-slate-800">
-        {[
-          <svg key="home" viewBox="0 0 24 24" className="w-6 h-6 fill-white"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>,
-          <Search key="search" className="w-6 h-6 text-slate-400" />,
-          <div key="add" className="w-10 h-7 border-2 border-white rounded-lg flex items-center justify-center"><span className="text-white text-lg leading-none">+</span></div>,
-          <Play key="reels" className="w-6 h-6 text-slate-400" />,
-          <div key="profile" className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center text-xs">{modelEmoji}</div>,
-        ]}
+        )}
       </div>
     </div>
   );
 }
 
-// ─── TikTok Feed Preview ──────────────────────────────────────────────────────
+// ─── TikTok Feed View ─────────────────────────────────────────────────
 
-function TikTokFeedPreview({
-  modelName,
-  modelEmoji,
-  scheduledPosts,
-}: {
-  modelName: string;
-  modelEmoji: string;
-  scheduledPosts: GalleryAsset[];
-}) {
-  const handle = modelName.toLowerCase().replace(/\s/g, '_');
-  const items = scheduledPosts.length > 0 ? scheduledPosts.slice(0, 3) : null;
+function TikTokFeedPreview({ modelName, selectedAssets }: { modelName: string; selectedAssets: GalleryAsset[] }) {
+  const handle = modelName.toLowerCase().replace(/\s/g, '');
 
   return (
-    <div className="bg-black rounded-2xl overflow-hidden border border-slate-700 w-full max-w-sm mx-auto">
-      {/* Status bar */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-1">
-        <span className="text-white text-[11px] font-semibold">9:41</span>
-        <div className="flex items-center gap-1">
-          <div className="w-5 h-2 border border-white rounded-sm"><div className="w-3/4 h-full bg-white rounded-sm" /></div>
+    <div className="flex flex-col" style={{ background: '#fff', minHeight: '100%' }}>
+      {/* Nav */}
+      <div className="flex items-center justify-between px-4 py-2.5 sticky top-0 z-10" style={{ background: '#fff' }}>
+        <ArrowLeft className="w-5 h-5 text-black" />
+        <span className="text-[13px] font-bold text-black">@{handle}</span>
+        <div className="flex items-center gap-3">
+          <Share2 className="w-4.5 h-4.5 text-black" style={{ width: 18, height: 18 }} />
+          <MoreHorizontal className="w-5 h-5 text-black" />
         </div>
       </div>
 
-      {/* TikTok top nav */}
-      <div className="flex items-center justify-between px-4 py-2">
-        <Search className="w-5 h-5 text-white" />
-        <div className="flex gap-6 text-sm font-semibold">
-          <span className="text-slate-400">Following</span>
-          <div className="text-white border-b-2 border-white pb-0.5">For You</div>
-        </div>
-        <div className="w-5" />
-      </div>
-
-      {/* Video area */}
-      {items && items[0] ? (
-        <div className="relative mx-2 rounded-xl overflow-hidden" style={{ aspectRatio: '9/16', maxHeight: 280 }}>
-          <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-            {items[0].fileType === 'video' ? (
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-16 h-16 bg-red-500/20 border border-red-500/40 rounded-full flex items-center justify-center">
-                  <Play className="w-8 h-8 text-red-400" />
-                </div>
-                <span className="text-xs text-slate-400">{items[0].fileName}</span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2">
-                <ImageIcon className="w-10 h-10 text-slate-600" />
-                <span className="text-xs text-slate-400">Slideshow</span>
-              </div>
-            )}
-          </div>
-
-          {/* NEW badge */}
-          <div className="absolute top-2 left-2 bg-violet-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold">
-            SCHEDULED
-          </div>
-
-          {/* TikTok right sidebar */}
-          <div className="absolute right-2 bottom-16 flex flex-col gap-5 items-center">
-            <div className="flex flex-col items-center gap-0.5">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center border-2 border-black text-base">
-                {modelEmoji}
-              </div>
-              <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center -mt-2 border border-black">
-                <span className="text-white text-[8px] font-bold">+</span>
-              </div>
-            </div>
-            <div className="flex flex-col items-center gap-0.5">
-              <Heart className="w-7 h-7 text-white" />
-              <span className="text-white text-[10px]">42.1K</span>
-            </div>
-            <div className="flex flex-col items-center gap-0.5">
-              <MessageCircle className="w-7 h-7 text-white" />
-              <span className="text-white text-[10px]">1.2K</span>
-            </div>
-            <div className="flex flex-col items-center gap-0.5">
-              <Bookmark className="w-7 h-7 text-white" />
-              <span className="text-white text-[10px]">8.4K</span>
-            </div>
-            <div className="flex flex-col items-center gap-0.5">
-              <Send className="w-7 h-7 text-white" />
-              <span className="text-white text-[10px]">Share</span>
-            </div>
-          </div>
-
-          {/* Bottom info */}
-          <div className="absolute left-0 right-12 bottom-0 px-3 py-3 bg-gradient-to-t from-black/80 to-transparent">
-            <p className="text-white text-xs font-semibold">@{handle}</p>
-            <p className="text-slate-300 text-[10px] mt-0.5 line-clamp-2">✨ New content incoming! Stay tuned 🔥</p>
-            <div className="flex items-center gap-1 mt-1.5">
-              <Music2 className="w-3 h-3 text-white animate-spin" style={{ animationDuration: '3s' }} />
-              <span className="text-white text-[10px]">Original sound - {handle}</span>
-            </div>
+      {/* Profile section */}
+      <div className="flex flex-col items-center px-4 pt-2 pb-4">
+        {/* Avatar */}
+        <div className="w-20 h-20 rounded-full overflow-hidden mb-2"
+          style={{ border: '2px solid #f0f0f0' }}>
+          <div className="w-full h-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-3xl text-white font-bold">
+            {modelName[0]}
           </div>
         </div>
-      ) : (
-        <div className="mx-2 rounded-xl bg-slate-900 flex items-center justify-center" style={{ aspectRatio: '9/16', maxHeight: 280 }}>
-          <div className="text-center">
-            <Play className="w-10 h-10 text-slate-700 mx-auto mb-2" />
-            <p className="text-slate-600 text-xs">Select assets to preview</p>
-          </div>
-        </div>
-      )}
+        <p className="text-[14px] font-bold text-black mb-0.5">@{handle}</p>
+        <p className="text-[11px] text-gray-500 mb-3">{modelName}</p>
 
-      {/* Post count chips */}
-      {items && (
-        <div className="flex gap-1.5 px-3 py-2 overflow-x-auto no-scrollbar">
-          {items.map((a, i) => (
-            <div key={a.id} className={`flex-shrink-0 w-10 h-1.5 rounded-full ${i === 0 ? 'bg-white' : 'bg-slate-600'}`} />
+        {/* Stats */}
+        <div className="flex gap-6 mb-3">
+          {[
+            { val: '312', label: 'Following' },
+            { val: '128.4K', label: 'Followers' },
+            { val: '2.1M', label: 'Likes' },
+          ].map(({ val, label }) => (
+            <div key={label} className="flex flex-col items-center">
+              <span className="text-[14px] font-bold text-black">{val}</span>
+              <span className="text-[10px] text-gray-500">{label}</span>
+            </div>
           ))}
         </div>
-      )}
 
-      {/* Bottom nav */}
-      <div className="flex items-center justify-around px-2 py-3 border-t border-slate-800 mt-1">
+        {/* Follow / Message buttons */}
+        <div className="flex gap-2 w-full">
+          <button className="flex-1 py-2 rounded-md text-[12px] font-bold text-white"
+            style={{ background: '#FE2C55' }}>Follow</button>
+          <button className="flex-1 py-2 rounded-md text-[12px] font-semibold text-black"
+            style={{ background: '#f1f1f2', border: '1px solid #e5e5e5' }}>Message</button>
+        </div>
+
+        {/* Bio */}
+        <p className="text-[10px] text-black text-center mt-2 leading-snug">
+          ✨ Content creator · New videos daily 🔥
+        </p>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex" style={{ borderTop: '0.5px solid #f0f0f0', borderBottom: '0.5px solid #f0f0f0' }}>
         {[
-          { icon: <svg key="home" viewBox="0 0 24 24" className="w-6 h-6 fill-white"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>, label: 'Home' },
-          { icon: <Search className="w-6 h-6 text-slate-500" />, label: 'Discover' },
-          { icon: <div className="w-10 h-7 bg-white rounded-lg flex items-center justify-center"><span className="text-black text-lg leading-none font-bold">+</span></div>, label: '' },
-          { icon: <MessageCircle className="w-6 h-6 text-slate-500" />, label: 'Inbox' },
-          { icon: <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 text-xs flex items-center justify-center">{modelEmoji}</div>, label: 'Me' },
-        ].map(({ icon, label }, i) => (
-          <div key={i} className="flex flex-col items-center gap-0.5">
-            {icon}
-            {label && <span className={`text-[9px] ${i === 0 ? 'text-white' : 'text-slate-500'}`}>{label}</span>}
-          </div>
+          { id: 'videos', label: 'Videos' },
+          { id: 'liked', label: 'Liked' },
+          { id: 'saved', label: 'Saved' },
+        ].map(({ id, label }) => (
+          <button key={id} className="flex-1 py-2.5 text-[11px] font-semibold transition-colors text-black">
+            {label}
+          </button>
         ))}
       </div>
+
+      {/* Video grid */}
+      {selectedAssets.length > 0 ? (
+        <div className="grid grid-cols-3" style={{ gap: 0.5 }}>
+          {selectedAssets.map((asset, idx) => (
+            <div key={asset.id} className="relative overflow-hidden" style={{ aspectRatio: '9/16', background: '#f5f5f5' }}>
+              {asset.fileUrl ? (
+                <img src={asset.fileUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Play className="w-8 h-8 text-slate-500" />
+                </div>
+              )}
+              <Play className="absolute top-1 right-1 w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="py-12 text-center" style={{ background: '#fafafa' }}>
+          <Play className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+          <p className="text-slate-500 text-sm">Select assets to preview</p>
+        </div>
+      )}
     </div>
   );
 }
+
 
 // ─── Feed Preview Panel ───────────────────────────────────────────────────────
 
@@ -471,32 +444,9 @@ function FeedPreviewPanel({
   onClose: () => void;
 }) {
   const { selectedModelId } = useStore();
-  const models = useStore(getVisibleModels); // Filtered by user role/agency
+  const models = useStore(getVisibleModels);
   const model = models.find((m) => m.id === selectedModelId) || models[0];
   const [platform, setPlatform] = useState<'instagram' | 'tiktok'>('instagram');
-  const [fetchedPosts, setFetchedPosts] = useState<IGPost[]>([]);
-  const [loadingFeed, setLoadingFeed] = useState(false);
-  const [feedError, setFeedError] = useState('');
-
-  const fetchRealPosts = async () => {
-    const conn = model?.metaConnection;
-    if (!conn?.instagramAccountId || !conn?.accessToken) {
-      setFeedError('Connect Meta API in Model Settings to load real posts.');
-      return;
-    }
-    setLoadingFeed(true);
-    setFeedError('');
-    try {
-      const res = await fetch(`/api/meta/media?accountId=${conn.instagramAccountId}&accessToken=${conn.accessToken}&limit=9`);
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-      setFetchedPosts(json.data || []);
-    } catch (e: unknown) {
-      setFeedError(e instanceof Error ? e.message : 'Failed to load feed');
-    } finally {
-      setLoadingFeed(false);
-    }
-  };
 
   return (
     <div className="card p-4 space-y-4">
@@ -526,37 +476,16 @@ function FeedPreviewPanel({
         ))}
       </div>
 
-      {/* Real posts button */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={fetchRealPosts}
-          disabled={loadingFeed}
-          className="btn-ghost text-xs flex items-center gap-1.5 py-1.5"
-        >
-          {loadingFeed ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-          {fetchedPosts.length > 0 ? 'Refresh Feed' : 'Load Real Posts'}
-        </button>
-        {feedError && <span className="text-[10px] text-amber-400 flex-1 line-clamp-1">{feedError}</span>}
-        {fetchedPosts.length > 0 && (
-          <span className="text-[10px] text-green-400">{fetchedPosts.length} posts loaded</span>
-        )}
+      {/* Phone frame preview */}
+      <div className="flex justify-center py-2">
+        <PhoneFrame dark={platform === 'tiktok'}>
+          {platform === 'instagram' ? (
+            <IGProfilePreview modelName={model?.name || 'Model'} selectedAssets={selectedAssets} />
+          ) : (
+            <TikTokFeedPreview modelName={model?.name || 'Model'} selectedAssets={selectedAssets} />
+          )}
+        </PhoneFrame>
       </div>
-
-      {/* Preview */}
-      {platform === 'instagram' ? (
-        <InstagramFeedPreview
-          modelName={model?.name || 'Model'}
-          modelEmoji={model?.profileImage || '👤'}
-          scheduledPosts={selectedAssets}
-          fetchedPosts={fetchedPosts}
-        />
-      ) : (
-        <TikTokFeedPreview
-          modelName={model?.name || 'Model'}
-          modelEmoji={model?.profileImage || '👤'}
-          scheduledPosts={selectedAssets}
-        />
-      )}
 
       {selectedAssets.length === 0 && (
         <p className="text-xs text-slate-500 text-center">Select assets from the gallery to preview them in the feed</p>
@@ -607,8 +536,8 @@ export default function GalleryPage() {
     setModels(mockModels);
     setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
-    setGalleryAssets(mockGalleryAssets);
-  }, [setModels, setSelectedModelId, setCurrentUser, setGalleryAssets]);
+    // Gallery assets loaded from R2 or local uploads, not mock data
+  }, [setModels, setSelectedModelId, setCurrentUser]);
 
   const selectedModel = models.find((m) => m.id === selectedModelId);
 
@@ -726,7 +655,8 @@ export default function GalleryPage() {
   const selectedAssets = galleryAssets.filter((a) => selectedIds.has(a.id));
 
   return (
-    <div className="min-h-screen">
+    <AuthGuard>
+      <div className="min-h-screen">
       <AutoPublisher />
       <div className="max-w-7xl mx-auto px-6 py-6">
         <div className={`flex gap-6 ${showFeedPreview ? 'lg:flex-row flex-col' : 'flex-col'}`}>
@@ -1076,6 +1006,7 @@ export default function GalleryPage() {
       })()}
 
       {workflowStep === 'scheduling' && <BatchScheduler />}
-    </div>
+      </div>
+    </AuthGuard>
   );
 }

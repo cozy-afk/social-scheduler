@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store';
 import { mockModels, mockAdmin, mockPosts, mockCaptions, mockVAUsers } from '@/lib/mockData';
 import CalendarView from '@/components/CalendarView';
 import CreatePostModal from '@/components/CreatePostModal';
+import { AuthGuard } from '@/components/AuthGuard';
 
 export default function AdminPage() {
   const { setModels, setSelectedModelId, setCurrentUser, setPosts, setCaptions, setVAUsers, showCreatePostModal } = useStore();
@@ -19,11 +20,13 @@ export default function AdminPage() {
   }, [setModels, setSelectedModelId, setCurrentUser, setPosts, setCaptions, setVAUsers]);
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-7xl mx-auto">
-        <CalendarView />
+    <AuthGuard>
+      <div className="min-h-screen p-6">
+        <div className="max-w-7xl mx-auto">
+          <CalendarView />
+        </div>
+        {showCreatePostModal && <CreatePostModal />}
       </div>
-      {showCreatePostModal && <CreatePostModal />}
-    </div>
+    </AuthGuard>
   );
 }
