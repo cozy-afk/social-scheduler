@@ -60,6 +60,7 @@ function AddModelModal({ onSave, onClose }: AddModelModalProps) {
       assignedVaIds: [],
       postingSchedule: [],
       postingFrequency: [],
+      dailyTarget: { reels: 3, carousels: 1, stories: 2 },
       createdAt: new Date().toISOString(),
     };
 

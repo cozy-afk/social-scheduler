@@ -516,6 +516,7 @@ export default function ModelsPage() {
           { platform: 'threads',   enabled: true,  postsPerDay: 1, startHour: 10, endHour: 18, postTypes: ['threads_post'] },
           { platform: 'x',         enabled: false, postsPerDay: 1, startHour: 9,  endHour: 17, postTypes: ['x_post'] },
         ] as PostingFrequencyConfig[],
+        dailyTarget: data.dailyTarget ?? { reels: 3, carousels: 1, stories: 2 },
         assignedVaIds: data.assignedVaIds || [],
         status: data.status || 'active',
         createdAt: new Date().toISOString(),
