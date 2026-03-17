@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
+import { prefetchGalleryAssets } from '@/lib/gallery-cache';
 
 const NAV_ITEMS = [
   { href: '/gallery', icon: LayoutGrid, label: 'Gallery' },
@@ -160,6 +161,7 @@ export default function Sidebar() {
                 <button
                   key={m.id}
                   onClick={() => { setSelectedModelId(m.id); setModelDropdownOpen(false); }}
+                  onMouseEnter={() => { if (m.s3Folder && m.id !== selectedModelId) prefetchGalleryAssets(m.s3Folder, m.id); }}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs text-left transition-colors hover:bg-white/5"
                 >
                   <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-violet-600 to-purple-500 flex items-center justify-center text-sm flex-shrink-0">

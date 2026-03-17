@@ -12,6 +12,7 @@ import AutoPublisher from '@/components/AutoPublisher';
 import FeedPreviewPanel from '@/components/FeedPreviewPanel';
 import { GalleryAsset, CropRatio } from '@/types/models';
 import { calculateViralityScore, type ViralityAnalysis } from '@/lib/virality-analyzer';
+import { getCachedAssets, setCachedAssets, fetchGalleryAssets } from '@/lib/gallery-cache';
 import {
   Upload, Check, X, Film, Image as ImageIcon,
   HardDrive, Search, FolderOpen,
@@ -275,6 +276,7 @@ export default function GalleryPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [r2Loading, setR2Loading] = useState(false);
+  const [r2Refreshing, setR2Refreshing] = useState(false);
   const [r2Error, setR2Error] = useState<string | null>(null);
 
   // Virality analysis state
@@ -289,29 +291,59 @@ export default function GalleryPage() {
     // Gallery assets loaded from R2 or local uploads, not mock data
   }, [setModels, setSelectedModelId, setCurrentUser]);
 
-  // Clear gallery assets when the active model changes
-  const prevModelIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (prevModelIdRef.current !== null && prevModelIdRef.current !== selectedModelId) {
-      setGalleryAssets([]);
-      setSelectedIds(new Set());
-      clearApprovals();
-      setR2Error(null);
-    }
-    prevModelIdRef.current = selectedModelId;
-  }, [selectedModelId, setGalleryAssets, clearApprovals]);
-
   const selectedModel = models.find((m) => m.id === selectedModelId);
 
+  // Auto-load gallery when the selected model changes (stale-while-revalidate)
+  useEffect(() => {
+    if (!selectedModel?.s3Folder) return;
+
+    setSelectedIds(new Set());
+    clearApprovals();
+    setR2Error(null);
+
+    const cached = getCachedAssets(selectedModel.id);
+
+    if (cached) {
+      // Show cached assets immediately — no loading flash
+      setGalleryAssets(cached.assets);
+
+      if (cached.status === 'stale') {
+        // Refresh in the background; user keeps seeing content
+        setR2Refreshing(true);
+        fetchGalleryAssets(selectedModel.s3Folder, cached.etag)
+          .then(({ assets, etag, notModified }) => {
+            if (!notModified) {
+              setCachedAssets(selectedModel.id, assets, etag);
+              setGalleryAssets(assets);
+            }
+          })
+          .catch(() => {})
+          .finally(() => setR2Refreshing(false));
+      }
+    } else {
+      // Cache miss — full load with spinner
+      setGalleryAssets([]);
+      setR2Loading(true);
+      fetchGalleryAssets(selectedModel.s3Folder, null)
+        .then(({ assets, etag }) => {
+          setCachedAssets(selectedModel.id, assets, etag);
+          setGalleryAssets(assets);
+        })
+        .catch((err) => setR2Error(err instanceof Error ? err.message : 'Unknown error'))
+        .finally(() => setR2Loading(false));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModel?.id]);
+
+  // Manual refresh — bypass cache
   const loadFromR2 = useCallback(async () => {
     if (!selectedModel?.s3Folder) return;
     setR2Loading(true);
     setR2Error(null);
     try {
-      const res = await fetch(`/api/r2/gallery?modelFolder=${encodeURIComponent(selectedModel.s3Folder)}`);
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error ?? 'Failed to load from R2');
-      setGalleryAssets(json.assets);
+      const { assets, etag } = await fetchGalleryAssets(selectedModel.s3Folder, null);
+      setCachedAssets(selectedModel.id, assets, etag);
+      setGalleryAssets(assets);
     } catch (err) {
       setR2Error(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -589,10 +621,10 @@ export default function GalleryPage() {
                   onClick={loadFromR2}
                   disabled={r2Loading || !selectedModel?.s3Folder}
                   className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40"
-                  title={selectedModel?.s3Folder ? `Load from vault-storage/[MODELS]/${selectedModel.s3Folder}/` : 'No R2 folder configured'}
+                  title={selectedModel?.s3Folder ? `Refresh from vault-storage/[MODELS]/${selectedModel.s3Folder}/` : 'No R2 folder configured'}
                 >
-                  {r2Loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <HardDrive className="w-4 h-4" />}
-                  {r2Loading ? 'Loading…' : 'Load from Vault'}
+                  {r2Loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className={`w-4 h-4 ${r2Refreshing ? 'animate-spin text-violet-400' : ''}`} />}
+                  {r2Loading ? 'Loading…' : 'Refresh'}
                 </button>
                 {r2Error && (
                   <span className="text-xs text-red-400 max-w-xs truncate" title={r2Error}>{r2Error}</span>
@@ -624,6 +656,13 @@ export default function GalleryPage() {
                 </div>
               </div>
             </div>
+
+            {/* Background-refresh indicator */}
+            {r2Refreshing && (
+              <div className="h-0.5 w-full rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <div className="h-full bg-violet-500 animate-pulse" style={{ width: '100%' }} />
+              </div>
+            )}
 
             {/* Stats row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">

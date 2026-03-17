@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listObjects, getPresignedUrl, getPublicUrl } from '@/lib/r2';
 import { GalleryAsset } from '@/types/models';
+import { createHash } from 'crypto';
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'gif', 'avif']);
 const VIDEO_EXTS = new Set(['mp4', 'mov', 'webm', 'avi', 'mkv']);
@@ -32,47 +33,76 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'modelFolder is required' }, { status: 400 });
   }
 
-  const prefix = `[MODELS]/${modelFolder}/`;
+  // Sanitize: only allow alphanumeric, hyphens, underscores — prevent path traversal
+  const safeFolder = modelFolder.replace(/[^a-zA-Z0-9_\-]/g, '');
+  if (!safeFolder) {
+    return NextResponse.json({ ok: false, error: 'Invalid modelFolder' }, { status: 400 });
+  }
+
+  const prefix = `[MODELS]/${safeFolder}/`;
 
   try {
     const { objects } = await listObjects(prefix);
 
-    const assets: GalleryAsset[] = [];
+    // Compute ETag from the object list (key + lastModified) — cheap, no signing needed
+    const etagInput = objects
+      .map((o) => `${o.key}:${o.lastModified.getTime()}`)
+      .sort()
+      .join('|');
+    const etag = `"${createHash('sha1').update(etagInput).digest('hex').slice(0, 16)}"`;
 
-    for (const obj of objects) {
-      const fileType = fileTypeOf(obj.key);
-      if (!fileType) continue; // skip non-media files
-
-      // The UUID is the second-to-last path segment: prefix/folder/UUID/filename
-      const parts = obj.key.split('/');
-      const fileName = parts[parts.length - 1];
-      const uuid = parts[parts.length - 2];
-      const folder = parts[parts.length - 3]; // subfolder name e.g. "pics", "reels"
-
-      const fileUrl = presign
-        ? await getPresignedUrl(obj.key, 3600)
-        : getPublicUrl(obj.key);
-
-      assets.push({
-        id: uuid,
-        fileName,
-        fileUrl,
-        fileType,
-        sizeBytes: obj.size,
-        uploadedAt: obj.lastModified.toISOString(),
-        source: 's3',
-        s3Key: obj.key,
-        // Store folder as a tag so UI can group/filter by it
-        // We reuse the thumbnailUrl slot for the folder name (used as category tag)
-        thumbnailUrl: fileType === 'video' ? undefined : fileUrl,
-        // Store folder name as metadata for filtering
+    // Return 304 if client already has the same version
+    const clientEtag = req.headers.get('if-none-match');
+    if (clientEtag === etag) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: {
+          'ETag': etag,
+          'Cache-Control': 'private, max-age=300, stale-while-revalidate=1800',
+        },
       });
     }
 
-    // Sort newest first (by lastModified)
+    // Filter to media files only, then generate all URLs in parallel
+    const mediaObjects = objects.filter((o) => fileTypeOf(o.key) !== null);
+
+    const assets: GalleryAsset[] = await Promise.all(
+      mediaObjects.map(async (obj) => {
+        const fileType = fileTypeOf(obj.key)!;
+        const parts = obj.key.split('/');
+        const fileName = parts[parts.length - 1];
+        const uuid = parts[parts.length - 2];
+
+        const fileUrl = presign
+          ? await getPresignedUrl(obj.key, 3600)
+          : getPublicUrl(obj.key);
+
+        return {
+          id: uuid,
+          fileName,
+          fileUrl,
+          fileType,
+          sizeBytes: obj.size,
+          uploadedAt: obj.lastModified.toISOString(),
+          source: 's3' as const,
+          s3Key: obj.key,
+          thumbnailUrl: fileType === 'video' ? undefined : fileUrl,
+        };
+      })
+    );
+
+    // Sort newest first
     assets.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
 
-    return NextResponse.json({ ok: true, assets, total: assets.length });
+    return NextResponse.json(
+      { ok: true, assets, total: assets.length },
+      {
+        headers: {
+          'ETag': etag,
+          'Cache-Control': 'private, max-age=300, stale-while-revalidate=1800',
+        },
+      }
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
