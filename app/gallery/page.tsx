@@ -597,12 +597,33 @@ export default function GalleryPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [r2Loading, setR2Loading] = useState(false);
+  const [r2Error, setR2Error] = useState<string | null>(null);
+
   useEffect(() => {
     setModels(mockModels);
     setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
     setGalleryAssets(mockGalleryAssets);
   }, [setModels, setSelectedModelId, setCurrentUser, setGalleryAssets]);
+
+  const selectedModel = models.find((m) => m.id === selectedModelId);
+
+  const loadFromR2 = useCallback(async () => {
+    if (!selectedModel?.s3Folder) return;
+    setR2Loading(true);
+    setR2Error(null);
+    try {
+      const res = await fetch(`/api/r2/gallery?modelFolder=${encodeURIComponent(selectedModel.s3Folder)}`);
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error ?? 'Failed to load from R2');
+      setGalleryAssets(json.assets);
+    } catch (err) {
+      setR2Error(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setR2Loading(false);
+    }
+  }, [selectedModel, setGalleryAssets]);
 
   const handleLocalUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -729,6 +750,18 @@ export default function GalleryPage() {
                   <Eye className="w-4 h-4" />
                   Feed Preview
                 </button>
+                <button
+                  onClick={loadFromR2}
+                  disabled={r2Loading || !selectedModel?.s3Folder}
+                  className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40"
+                  title={selectedModel?.s3Folder ? `Load from vault-storage/[MODELS]/${selectedModel.s3Folder}/` : 'No R2 folder configured'}
+                >
+                  {r2Loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <HardDrive className="w-4 h-4" />}
+                  {r2Loading ? 'Loading…' : 'Load from Vault'}
+                </button>
+                {r2Error && (
+                  <span className="text-xs text-red-400 max-w-xs truncate" title={r2Error}>{r2Error}</span>
+                )}
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="btn-secondary flex items-center gap-2 text-sm"
