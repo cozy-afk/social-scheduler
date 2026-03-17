@@ -71,7 +71,9 @@ export const authOptions: NextAuthOptions = {
 const handler = async (req: Request, context: { params?: Promise<Record<string, string | string[]>> }) => {
   const nextRequest = req as unknown as NextRequest;
   const dynamicUrl = getAuthUrl(nextRequest);
-  return NextAuth({ ...authOptions, url: dynamicUrl })(req, context);
+  // Set the URL as an environment variable for this request
+  (process.env as any).NEXTAUTH_URL = dynamicUrl;
+  return NextAuth(authOptions)(req, context);
 };
 
 export { handler as GET, handler as POST };
