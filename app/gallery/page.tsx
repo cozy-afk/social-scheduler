@@ -342,15 +342,19 @@ export default function GalleryPage() {
 
   // Auto-load gallery when the selected model changes (stale-while-revalidate)
   useEffect(() => {
-    if (!selectedModel?.s3Folder) return;
-
-    let cancelled = false;
-
+    // Always clear the previous model's assets immediately so the old gallery
+    // never stays on screen while the new one is loading.
+    setGalleryAssets([]);
     setSelectedIds(new Set());
     clearApprovals();
     setR2Error(null);
-    setR2Refreshing(false); // clear any in-flight refresh indicator from previous model
+    setR2Refreshing(false);
+    setR2Loading(false);
     setPage(1);
+
+    if (!selectedModel?.s3Folder) return; // no R2 folder configured — show empty gallery
+
+    let cancelled = false;
 
     const cached = getCachedAssets(selectedModel.id);
 
@@ -359,7 +363,7 @@ export default function GalleryPage() {
       setGalleryAssets(cached.assets);
 
       if (cached.status === 'stale') {
-        // Refresh in the background; user keeps seeing content
+        // Refresh in the background; user keeps seeing stale content
         setR2Refreshing(true);
         fetchGalleryAssets(selectedModel.s3Folder, cached.etag)
           .then(({ assets, etag, notModified }) => {
@@ -368,7 +372,7 @@ export default function GalleryPage() {
               setCachedAssets(selectedModel.id, assets, etag);
               setGalleryAssets(assets);
             } else {
-              touchCachedAssets(selectedModel.id); // 304 — confirmed fresh, reset stale timer
+              touchCachedAssets(selectedModel.id);
             }
           })
           .catch(() => {})
@@ -376,7 +380,6 @@ export default function GalleryPage() {
       }
     } else {
       // Cache miss — full load with spinner
-      setGalleryAssets([]);
       setR2Loading(true);
       fetchGalleryAssets(selectedModel.s3Folder, null)
         .then(({ assets, etag }) => {
@@ -390,7 +393,7 @@ export default function GalleryPage() {
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModel?.id]);
+  }, [selectedModelId]);
 
   // Manual refresh — bypass cache
   const loadFromR2 = useCallback(async () => {
