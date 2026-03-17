@@ -1,0 +1,18 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "functions": {
+    "app/api/generate-captions/route.ts": { "maxDuration": 30 },
+    "app/api/generate-stories/route.ts":  { "maxDuration": 30 },
+    "app/api/extract-caption/route.ts":   { "maxDuration": 30 },
+    "app/api/analyze-captions/route.ts":  { "maxDuration": 30 },
+    "app/api/cron/publish-scheduled/route.ts": { "maxDuration": 60 }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/publish-scheduled",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
