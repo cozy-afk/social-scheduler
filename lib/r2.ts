@@ -5,7 +5,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 let _r2Client: S3Client | null = null;
 
-function getR2Client(): S3Client {
+export function getR2Client(): S3Client {
   if (_r2Client) return _r2Client;
 
   const endpoint = process.env.R2_ENDPOINT;

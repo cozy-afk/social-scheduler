@@ -78,7 +78,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Filter to media files only, then generate all URLs in parallel
+    // Filter to media files only, then generate full-resolution URLs in parallel.
+    // thumbnailUrl always points to the stable proxy (/api/r2/thumb) so the
+    // browser can cache it long-term — presigned URLs expire in 1h and bypass cache.
     const mediaObjects = objects.filter((o) => fileTypeOf(o.key) !== null);
 
     const assets: GalleryAsset[] = await Promise.all(
@@ -96,6 +98,9 @@ export async function GET(req: NextRequest) {
           ? await getPresignedUrl(obj.key, 3600)
           : getPublicUrl(obj.key);
 
+        // Stable cacheable URL for thumbnails; presigned (or public) URL for full playback/download
+        const thumbUrl = `/api/r2/thumb?key=${encodeURIComponent(obj.key)}`;
+
         return {
           id: uuid,
           fileName,
@@ -105,7 +110,7 @@ export async function GET(req: NextRequest) {
           uploadedAt: obj.lastModified.toISOString(),
           source: 's3' as const,
           s3Key: obj.key,
-          thumbnailUrl: fileType === 'video' ? undefined : fileUrl,
+          thumbnailUrl: fileType === 'image' ? thumbUrl : undefined,
         };
       })
     );

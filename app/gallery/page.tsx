@@ -125,21 +125,22 @@ function AssetThumbnail({
     >
       <div className="w-full h-full bg-slate-800 flex items-center justify-center">
         {asset.fileType === 'video' ? (
+          // Never preload video data for thumbnails — show static placeholder instead.
+          // The actual video only loads when the user opens the lightbox.
           asset.thumbnailUrl ? (
-            <img src={asset.thumbnailUrl} alt={asset.fileName} className="w-full h-full object-cover" />
-          ) : asset.fileUrl ? (
-            <video
-              src={asset.fileUrl}
-              className="w-full h-full object-cover"
-              preload="metadata"
-              muted
-              playsInline
-            />
+            <img src={asset.thumbnailUrl} alt={asset.fileName} loading="lazy" decoding="async" className="w-full h-full object-cover" />
           ) : (
-            <Film className="w-8 h-8 text-slate-600" />
+            <div className="flex flex-col items-center justify-center gap-2 w-full h-full p-2">
+              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                <Film className="w-5 h-5 text-slate-300" />
+              </div>
+              <p className="text-[10px] text-slate-500 text-center truncate w-full px-1 leading-tight">
+                {asset.fileName}
+              </p>
+            </div>
           )
         ) : asset.fileUrl ? (
-          <img src={asset.fileUrl} alt={asset.fileName} className="w-full h-full object-cover" />
+          <img src={asset.fileUrl} alt={asset.fileName} loading="lazy" decoding="async" className="w-full h-full object-cover" />
         ) : (
           <ImageIcon className="w-8 h-8 text-slate-600" />
         )}
@@ -843,12 +844,12 @@ export default function GalleryPage() {
                             <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 flex items-center justify-center flex-shrink-0">
                               {asset.fileType === 'video' ? (
                                 thumbnailSrc ? (
-                                  <img src={thumbnailSrc} alt={asset.fileName} className="w-full h-full object-cover" />
+                                  <img src={thumbnailSrc} alt={asset.fileName} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                 ) : (
                                   <Film className="w-5 h-5 text-slate-500" />
                                 )
                               ) : asset.fileUrl ? (
-                                <img src={asset.fileUrl} alt={asset.fileName} className="w-full h-full object-cover" />
+                                <img src={asset.fileUrl} alt={asset.fileName} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                               ) : (
                                 <ImageIcon className="w-5 h-5 text-slate-500" />
                               )}
