@@ -51,6 +51,39 @@ interface IGPost {
 
 // ─── Asset Thumbnail ──────────────────────────────────────────────────────────
 
+// ─── Video Lightbox ───────────────────────────────────────────────────────────
+
+function VideoLightbox({ asset, onClose }: { asset: GalleryAsset; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-4xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute -top-10 right-0 text-white/60 hover:text-white transition-colors text-sm flex items-center gap-1"
+        >
+          <X className="w-5 h-5" /> Close
+        </button>
+        <video
+          src={asset.fileUrl}
+          controls
+          autoPlay
+          className="w-full rounded-xl max-h-[80vh] bg-black"
+          style={{ outline: 'none' }}
+        />
+        <p className="text-xs text-slate-400 mt-2 truncate">{asset.fileName}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Asset Thumbnail ──────────────────────────────────────────────────────────
+
 function AssetThumbnail({
   asset,
   selected,
@@ -58,6 +91,7 @@ function AssetThumbnail({
   isPosted,
   onToggle,
   onApprove,
+  onPreviewVideo,
   showVirality,
   viralityAnalysis,
 }: {
@@ -67,14 +101,13 @@ function AssetThumbnail({
   isPosted: boolean;
   onToggle: () => void;
   onApprove: (e: React.MouseEvent) => void;
+  onPreviewVideo: (e: React.MouseEvent) => void;
   showVirality: boolean;
   viralityAnalysis?: ViralityAnalysis;
 }) {
   const isOkRatio = asset.aspectRatio
     ? Math.abs(asset.aspectRatio - 1.0) < 0.03 || Math.abs(asset.aspectRatio - 0.8) < 0.03
     : true;
-
-  const thumbnailSrc = asset.thumbnailUrl || asset.fileUrl;
 
   return (
     <div
@@ -91,8 +124,16 @@ function AssetThumbnail({
     >
       <div className="w-full h-full bg-slate-800 flex items-center justify-center">
         {asset.fileType === 'video' ? (
-          thumbnailSrc ? (
-            <img src={thumbnailSrc} alt={asset.fileName} className="w-full h-full object-cover" />
+          asset.thumbnailUrl ? (
+            <img src={asset.thumbnailUrl} alt={asset.fileName} className="w-full h-full object-cover" />
+          ) : asset.fileUrl ? (
+            <video
+              src={asset.fileUrl}
+              className="w-full h-full object-cover"
+              preload="metadata"
+              muted
+              playsInline
+            />
           ) : (
             <Film className="w-8 h-8 text-slate-600" />
           )
@@ -113,11 +154,17 @@ function AssetThumbnail({
 
       <div className={`absolute inset-0 transition-all duration-150 ${selected ? 'bg-violet-500/20' : 'group-hover:bg-black/20'}`} />
 
-      {/* Video indicator */}
+      {/* Video play button — centered, opens lightbox */}
       {asset.fileType === 'video' && (
-        <div className="absolute top-2 left-2 bg-black/60 rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Play className="w-3 h-3 text-white" fill="white" />
-        </div>
+        <button
+          onClick={onPreviewVideo}
+          className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Watch video"
+        >
+          <div className="w-12 h-12 rounded-full bg-black/70 flex items-center justify-center border border-white/20 hover:bg-black/90 transition-colors">
+            <Play className="w-5 h-5 text-white ml-0.5" fill="white" />
+          </div>
+        </button>
       )}
 
       {/* Virality score badge */}
@@ -219,8 +266,9 @@ export default function GalleryPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { approvedAssetIds, approveAsset, unapproveAsset, clearApprovals } = useStore();
   const approvedIds = new Set(approvedAssetIds);
-  const [filter, setFilter] = useState<'all' | 'image' | 'video'>('all');
+  const [assetFilter, setAssetFilter] = useState<'all' | 'image' | 'video'>('all');
   const [search, setSearch] = useState('');
+  const [previewVideo, setPreviewVideo] = useState<GalleryAsset | null>(null);
   const [showFeedPreview, setShowFeedPreview] = useState(false);
   const [thumbSize, setThumbSize] = useState(3);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -457,9 +505,9 @@ export default function GalleryPage() {
     }
   }, [showVirality, galleryAssets, analyzeAllVirality]);
 
-  const filtered = galleryAssets.filter((a) => {
-    if (filter === 'image' && a.fileType !== 'image') return false;
-    if (filter === 'video' && a.fileType !== 'video') return false;
+  const filtered = useMemo(() => galleryAssets.filter((a) => {
+    if (assetFilter === 'image' && a.fileType !== 'image') return false;
+    if (assetFilter === 'video' && a.fileType !== 'video') return false;
     if (search) {
       const term = search.toLowerCase();
       const dateStr = a.uploadedAt
@@ -473,7 +521,7 @@ export default function GalleryPage() {
       if (!matches) return false;
     }
     return true;
-  });
+  }), [galleryAssets, assetFilter, search]);
 
   // Auto-trigger virality analysis for visible images
   useEffect(() => {
@@ -610,9 +658,9 @@ export default function GalleryPage() {
                 {(['all', 'image', 'video'] as const).map((f) => (
                   <button
                     key={f}
-                    onClick={() => setFilter(f)}
+                    onClick={() => setAssetFilter(f)}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-all ${
-                      filter === f ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                      assetFilter === f ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
                     {f}
@@ -689,6 +737,7 @@ export default function GalleryPage() {
                     isPosted={postedUrlSet.has(asset.fileUrl)}
                     onToggle={() => toggleSelect(asset.id)}
                     onApprove={(e) => toggleApprove(e, asset.id)}
+                    onPreviewVideo={(e) => { e.stopPropagation(); setPreviewVideo(asset); }}
                     showVirality={showVirality}
                     viralityAnalysis={viralityCache.get(asset.id)}
                   />
@@ -916,6 +965,11 @@ export default function GalleryPage() {
 
       {workflowStep === 'scheduling' && <BatchScheduler />}
       </div>
+
+      {/* Video lightbox */}
+      {previewVideo && (
+        <VideoLightbox asset={previewVideo} onClose={() => setPreviewVideo(null)} />
+      )}
     </AuthGuard>
   );
 }
