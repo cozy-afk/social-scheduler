@@ -1,5 +1,25 @@
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import DiscordProvider from 'next-auth/providers/discord';
+import { NextRequest } from 'next/server';
+
+// Get the current URL dynamically to support both production and preview deployments
+function getAuthUrl(request?: NextRequest): string {
+  // Use NEXTAUTH_URL if set (production)
+  if (process.env.NEXTAUTH_URL) {
+    return process.env.NEXTAUTH_URL;
+  }
+
+  // Otherwise, infer from the request
+  if (request) {
+    const protocol = request.headers.get('x-forwarded-proto') || 'https';
+    const host = request.headers.get('host');
+    if (host) {
+      return `${protocol}://${host}`;
+    }
+  }
+
+  return 'http://localhost:3000';
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -47,5 +67,11 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
-const handler = NextAuth(authOptions);
+// Create handler with dynamic URL support
+const handler = async (req: Request, context: { params?: Promise<Record<string, string | string[]>> }) => {
+  const nextRequest = req as unknown as NextRequest;
+  const dynamicUrl = getAuthUrl(nextRequest);
+  return NextAuth({ ...authOptions, url: dynamicUrl })(req, context);
+};
+
 export { handler as GET, handler as POST };
