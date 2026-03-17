@@ -1,223 +1,393 @@
 'use client';
 
 import { useStore } from '@/lib/store';
-import { useMemo } from 'react';
-import { format } from 'date-fns';
-import { Download, CheckCircle, Play } from 'lucide-react';
+import { useMemo, useState, useCallback, useRef } from 'react';
+import { format, isToday, isTomorrow, isPast, parseISO } from 'date-fns';
+import {
+  Download, CheckCircle2, Play, Copy, Check, Link,
+  AlertCircle, Clock, ChevronDown, ChevronUp, ExternalLink,
+  Image as ImageIcon, FileVideo, Layers,
+} from 'lucide-react';
 import { Post, Platform } from '@/types/models';
 import clsx from 'clsx';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const POST_TYPE_SHORT: Partial<Record<string, string>> = {
-  instagram_post:   'IG Post',
-  instagram_reel:   'IG Reel',
-  instagram_story:  'IG Story',
-  tiktok_reel:      'TT Reel',
-  tiktok_slideshow: 'TT Slideshow',
-  tiktok_story:     'TT Story',
-  x_post:           'X Post',
-  threads_post:     'Threads Post',
-  fanvue_post:      'Fanvue Post',
+const PLATFORM_COLORS: Record<Platform, { bg: string; text: string; dot: string }> = {
+  instagram: { bg: 'bg-pink-500/15',   text: 'text-pink-300',   dot: 'bg-pink-500'   },
+  tiktok:    { bg: 'bg-red-500/15',    text: 'text-red-300',    dot: 'bg-red-500'    },
+  threads:   { bg: 'bg-purple-500/15', text: 'text-purple-300', dot: 'bg-purple-500' },
+  x:         { bg: 'bg-slate-500/15',  text: 'text-slate-300',  dot: 'bg-slate-400'  },
+  fanvue:    { bg: 'bg-orange-500/15', text: 'text-orange-300', dot: 'bg-orange-500' },
 };
 
-const PLATFORM_BADGE_CLASSES: Record<Platform, string> = {
-  instagram: 'bg-pink-500/90 text-white',
-  tiktok:    'bg-red-500/90 text-white',
-  threads:   'bg-purple-500/90 text-white',
-  x:         'bg-slate-500/90 text-white',
-  fanvue:    'bg-orange-500/90 text-white',
-};
-
-const PLATFORM_GRADIENT: Record<Platform, string> = {
-  instagram: 'from-pink-600/40 to-pink-900/40',
-  tiktok:    'from-red-600/40 to-red-900/40',
-  threads:   'from-purple-600/40 to-purple-900/40',
-  x:         'from-slate-500/40 to-slate-800/40',
-  fanvue:    'from-orange-600/40 to-orange-900/40',
+const PLATFORM_ICON: Record<Platform, string> = {
+  instagram: '📸', tiktok: '🎵', threads: '🧵', x: '𝕏', fanvue: '🎭',
 };
 
 const PLATFORM_LABEL: Record<Platform, string> = {
-  instagram: 'Instagram',
-  tiktok:    'TikTok',
-  threads:   'Threads',
-  x:         'X',
-  fanvue:    'Fanvue',
+  instagram: 'Instagram', tiktok: 'TikTok', threads: 'Threads', x: 'X', fanvue: 'Fanvue',
 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+const POST_TYPE_LABEL: Record<string, string> = {
+  instagram_post: 'Post', instagram_reel: 'Reel', instagram_story: 'Story',
+  tiktok_reel: 'Reel', tiktok_slideshow: 'Slideshow', tiktok_story: 'Story',
+  x_post: 'Post', threads_post: 'Post', fanvue_post: 'Post',
+};
 
-interface ThumbnailProps {
-  post: Post;
-}
+// ─── Copy Button ─────────────────────────────────────────────────────────────
 
-function CardThumbnail({ post }: ThumbnailProps) {
-  const asset = post.assets[0];
-  const isVideo = asset?.fileType === 'video';
-  const hasUrl = typeof asset?.fileUrl === 'string' && asset.fileUrl.startsWith('http');
-  const gradient = PLATFORM_GRADIENT[post.platform];
+function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
 
-  if (!asset || !hasUrl) {
-    return (
-      <div className={clsx('w-full h-full bg-gradient-to-br', gradient, 'flex items-center justify-center')}>
-        <span className="text-3xl opacity-60">
-          {post.platform === 'instagram' ? '📸' : post.platform === 'tiktok' ? '🎵' : post.platform === 'threads' ? '🧵' : post.platform === 'fanvue' ? '🎭' : '𝕏'}
-        </span>
-      </div>
-    );
-  }
-
-  if (isVideo) {
-    return (
-      <div className="w-full h-full bg-slate-900 flex items-center justify-center relative">
-        <Play className="w-10 h-10 text-white/80" />
-      </div>
-    );
-  }
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.style.position = 'fixed';
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [text]);
 
   return (
-    <img
-      src={asset.fileUrl}
-      alt=""
-      className="w-full h-full object-cover"
-    />
+    <button
+      onClick={handleCopy}
+      className={clsx(
+        'flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex-shrink-0',
+        copied
+          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+          : 'bg-white/6 hover:bg-white/10 text-zinc-300 border border-white/10'
+      )}
+    >
+      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+      {copied ? 'Copied!' : label}
+    </button>
   );
 }
 
-interface ApprovalBadgeProps {
-  status: Post['approvalStatus'];
+// ─── Download helper ──────────────────────────────────────────────────────────
+
+function triggerDownload(url: string, filename: string) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
-function ApprovalBadge({ status }: ApprovalBadgeProps) {
-  if (!status) return null;
-
-  const classes = {
-    approved: 'bg-green-500/20 text-green-300 border border-green-500/30',
-    pending:  'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30',
-    rejected: 'bg-red-500/20 text-red-300 border border-red-500/30',
-  }[status];
-
-  const labels = {
-    approved: 'Approved',
-    pending:  'Pending Review',
-    rejected: 'Rejected',
-  }[status];
-
-  return (
-    <span className={clsx('text-[10px] font-semibold px-2 py-0.5 rounded-full', classes)}>
-      {labels}
-    </span>
-  );
+function buildFilename(post: Post, assetOrder: number, total: number): string {
+  const date = format(parseISO(post.scheduledTime), 'MMdd');
+  const time = format(parseISO(post.scheduledTime), 'HHmm');
+  const platform = PLATFORM_LABEL[post.platform];
+  const kind = POST_TYPE_LABEL[post.postType] ?? 'Post';
+  const ext = post.assets[assetOrder - 1]?.fileType === 'video' ? 'mp4' : 'jpg';
+  return total > 1
+    ? `${platform}_${kind}_${date}_${time}_${assetOrder}of${total}.${ext}`
+    : `${platform}_${kind}_${date}_${time}.${ext}`;
 }
 
 // ─── Task Card ────────────────────────────────────────────────────────────────
 
 interface TaskCardProps {
   post: Post;
-  onDownloadAsset: (post: Post, assetIndex?: number) => void;
-  onMarkAsPosted: (postId: string) => void;
+  onComplete: (postId: string, postedUrl: string) => void;
 }
 
-function TaskCard({ post, onDownloadAsset, onMarkAsPosted }: TaskCardProps) {
-  const scheduledDate = new Date(post.scheduledTime);
-  const scheduledLabel = format(scheduledDate, 'MMM d · h:mm a');
-  const isVideo = post.assets[0]?.fileType === 'video';
-  const captionPreview = post.description
-    ? post.description.length > 120
-      ? post.description.slice(0, 120) + '…'
-      : post.description
-    : null;
+function TaskCard({ post, onComplete }: TaskCardProps) {
+  const [urlInput, setUrlInput] = useState('');
+  const [showUrlField, setShowUrlField] = useState(false);
+  const [urlError, setUrlError] = useState('');
+  const [downloadedAll, setDownloadedAll] = useState(false);
+  const urlRef = useRef<HTMLInputElement>(null);
+
+  const colors = PLATFORM_COLORS[post.platform];
+  const scheduledAt = parseISO(post.scheduledTime);
+  const overdue = isPast(scheduledAt) && post.status !== 'completed';
+
+  const timeLabel = isToday(scheduledAt)
+    ? `Today · ${format(scheduledAt, 'h:mm a')}`
+    : isTomorrow(scheduledAt)
+    ? `Tomorrow · ${format(scheduledAt, 'h:mm a')}`
+    : format(scheduledAt, 'MMM d · h:mm a');
+
+  const isMultiAsset = post.assets.length > 1;
+  const hasVideo = post.assets.some((a) => a.fileType === 'video');
+  const firstAsset = post.assets[0];
+  const hasRealUrl = firstAsset?.fileUrl?.startsWith('http') || firstAsset?.fileUrl?.startsWith('/');
+
+  const handleDownloadAll = useCallback(() => {
+    post.assets.forEach((asset, idx) => {
+      const filename = buildFilename(post, asset.order, post.assets.length);
+      triggerDownload(asset.fileUrl, filename);
+    });
+    setDownloadedAll(true);
+  }, [post]);
+
+  const handleDownloadSingle = useCallback((idx: number) => {
+    const asset = post.assets[idx];
+    const filename = buildFilename(post, asset.order, post.assets.length);
+    triggerDownload(asset.fileUrl, filename);
+  }, [post]);
+
+  const handleMarkPosted = useCallback(() => {
+    setShowUrlField(true);
+    setTimeout(() => urlRef.current?.focus(), 50);
+  }, []);
+
+  const handleConfirm = useCallback(() => {
+    const url = urlInput.trim();
+    if (!url) {
+      setUrlError('Paste the post URL first');
+      return;
+    }
+    // Loose URL validation
+    if (!url.startsWith('http')) {
+      setUrlError('URL should start with https://');
+      return;
+    }
+    onComplete(post.id, url);
+  }, [urlInput, post.id, onComplete]);
 
   return (
-    <div className="card overflow-hidden flex flex-col">
-      {/* Thumbnail — ~40% of card height */}
-      <div className="relative w-full" style={{ paddingBottom: '42%' }}>
-        <div className="absolute inset-0">
-          <CardThumbnail post={post} />
-        </div>
-
-        {/* Platform badge — top-right */}
-        <span
-          className={clsx(
-            'absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full',
-            PLATFORM_BADGE_CLASSES[post.platform]
+    <div
+      className="rounded-2xl overflow-hidden flex flex-col"
+      style={{
+        background: 'var(--bg-card)',
+        border: `1px solid ${overdue ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.07)'}`,
+        boxShadow: overdue ? '0 0 0 1px rgba(239,68,68,0.1)' : 'none',
+      }}
+    >
+      {/* Header */}
+      <div
+        className={clsx('flex items-center justify-between px-4 py-2.5', colors.bg)}
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-base">{PLATFORM_ICON[post.platform]}</span>
+          <span className={clsx('text-xs font-bold', colors.text)}>
+            {PLATFORM_LABEL[post.platform]} {POST_TYPE_LABEL[post.postType]}
+          </span>
+          {isMultiAsset && (
+            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md font-semibold"
+              style={{ background: 'rgba(255,255,255,0.08)', color: '#aaa' }}>
+              <Layers className="w-3 h-3" />
+              {post.assets.length}
+            </span>
           )}
-        >
-          {PLATFORM_LABEL[post.platform]}
-        </span>
+        </div>
+        <div className={clsx('flex items-center gap-1.5 text-[11px] font-semibold', overdue ? 'text-red-400' : 'text-zinc-400')}>
+          {overdue && <AlertCircle className="w-3.5 h-3.5" />}
+          <Clock className="w-3 h-3" />
+          {timeLabel}
+        </div>
       </div>
 
-      {/* Card body */}
-      <div className="flex flex-col gap-2.5 p-3 flex-1">
-        {/* Post type + scheduled time row */}
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-semibold text-slate-200">
-            {POST_TYPE_SHORT[post.postType] ?? post.postType}
-          </span>
-          <span className="text-[11px] text-slate-400">{scheduledLabel}</span>
-        </div>
+      {/* Asset preview */}
+      <div className="relative w-full" style={{ background: '#0a0a0a' }}>
+        {firstAsset?.fileType === 'video' ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="flex flex-col items-center gap-2">
+              <FileVideo className="w-10 h-10 text-zinc-600" />
+              <span className="text-xs text-zinc-500">Video asset</span>
+            </div>
+          </div>
+        ) : hasRealUrl ? (
+          <img
+            src={firstAsset.fileUrl}
+            alt=""
+            className="w-full object-cover"
+            style={{ maxHeight: 280 }}
+          />
+        ) : (
+          <div className="flex items-center justify-center py-10">
+            <ImageIcon className="w-10 h-10 text-zinc-700" />
+          </div>
+        )}
 
-        {/* Approval status */}
-        {post.approvalStatus && (
+        {/* Multi-asset strip */}
+        {isMultiAsset && (
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+            {post.assets.map((_, i) => (
+              <div key={i} className={clsx('rounded-full transition-all',
+                i === 0 ? 'w-5 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/40')} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Content section */}
+      <div className="px-4 py-3 space-y-3">
+
+        {/* Description */}
+        {post.description ? (
           <div>
-            <ApprovalBadge status={post.approvalStatus} />
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                Description (post body)
+              </span>
+              <CopyButton text={post.description} label="Copy" />
+            </div>
+            <p className="text-sm text-zinc-200 leading-relaxed"
+              style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: '10px 12px', border: '1px solid rgba(255,255,255,0.07)' }}>
+              {post.description}
+            </p>
           </div>
+        ) : (
+          <div className="text-xs text-zinc-600 italic px-1">No description set</div>
         )}
 
-        {/* Caption preview */}
-        {captionPreview && (
-          <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">{captionPreview}</p>
-        )}
-
-        {/* Image caption overlay note */}
+        {/* Image caption overlay */}
         {post.imageCaption && (
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg px-2.5 py-1.5">
-            <p className="text-[10px] text-blue-400 font-medium mb-0.5">Image caption overlay</p>
-            <p className="text-xs text-blue-200 truncate">"{post.imageCaption}"</p>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                Text on image
+              </span>
+              <CopyButton text={post.imageCaption} label="Copy" />
+            </div>
+            <div className="text-sm font-medium text-violet-200 px-3 py-2 rounded-lg"
+              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.25)' }}>
+              "{post.imageCaption}"
+            </div>
           </div>
         )}
 
-        {/* Actions */}
-        <div className="space-y-1.5 mt-auto pt-1">
+        {/* Downloads */}
+        <div>
+          <span className="text-[10px] font-semibold uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-muted)' }}>
+            Assets
+          </span>
           {post.assets.length === 1 ? (
             <button
-              onClick={() => onDownloadAsset(post)}
-              className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"
+              onClick={() => handleDownloadSingle(0)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-95"
+              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}
             >
-              <Download className="w-3.5 h-3.5" />
-              Download {isVideo ? 'Video' : 'Image'}
+              <Download className="w-4 h-4" />
+              Download {firstAsset?.fileType === 'video' ? 'Video' : 'Image'}
             </button>
           ) : (
-            <div className="space-y-1">
-              {post.assets.map((asset, idx) => (
-                <button
-                  key={asset.id}
-                  onClick={() => onDownloadAsset(post, idx)}
-                  className="btn-ghost w-full flex items-center gap-2 justify-center text-xs py-1.5"
-                >
-                  <Download className="w-3 h-3" />
-                  {isVideo ? 'Video' : 'Image'} {asset.order}
-                </button>
-              ))}
+            <div className="space-y-1.5">
+              <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(post.assets.length, 3)}, 1fr)` }}>
+                {post.assets.map((asset, idx) => (
+                  <button
+                    key={asset.id}
+                    onClick={() => handleDownloadSingle(idx)}
+                    className="flex flex-col items-center gap-1 py-2 rounded-lg text-[10px] font-semibold text-zinc-300 transition-all active:scale-95"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    {asset.fileType === 'video' ? 'Video' : `Slide ${idx + 1}`}
+                  </button>
+                ))}
+              </div>
               <button
-                onClick={() => onDownloadAsset(post)}
-                className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"
+                onClick={handleDownloadAll}
+                className={clsx(
+                  'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95',
+                  downloadedAll ? 'text-green-400' : 'text-white'
+                )}
+                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}
               >
-                <Download className="w-3.5 h-3.5" />
-                Download All ({post.assets.length})
+                {downloadedAll ? <Check className="w-4 h-4" /> : <Download className="w-4 h-4" />}
+                {downloadedAll ? 'All downloaded' : `Download All (${post.assets.length})`}
               </button>
             </div>
           )}
-
-          <button
-            onClick={() => onMarkAsPosted(post.id)}
-            className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all duration-150 active:scale-95"
-          >
-            <CheckCircle className="w-4 h-4" />
-            Mark as Posted
-          </button>
         </div>
+
+        {/* Mark as posted / URL confirmation */}
+        {!showUrlField ? (
+          <button
+            onClick={handleMarkPosted}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-95"
+            style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            I've posted it — confirm
+          </button>
+        ) : (
+          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.06)' }}>
+            <div className="px-3 pt-3 pb-2">
+              <p className="text-xs font-bold text-green-400 mb-2 flex items-center gap-1.5">
+                <Link className="w-3.5 h-3.5" />
+                Paste the live post URL
+              </p>
+              <input
+                ref={urlRef}
+                type="url"
+                value={urlInput}
+                onChange={(e) => { setUrlInput(e.target.value); setUrlError(''); }}
+                onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
+                placeholder="https://www.instagram.com/p/..."
+                className="w-full text-sm text-white rounded-lg px-3 py-2 focus:outline-none"
+                style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${urlError ? 'rgba(239,68,68,0.5)' : 'rgba(34,197,94,0.25)'}` }}
+              />
+              {urlError && <p className="text-[11px] text-red-400 mt-1">{urlError}</p>}
+            </div>
+            <div className="flex gap-2 px-3 pb-3">
+              <button
+                onClick={() => { setShowUrlField(false); setUrlInput(''); setUrlError(''); }}
+                className="flex-1 py-2 text-xs font-semibold text-zinc-400 rounded-lg transition-colors hover:text-white"
+                style={{ background: 'rgba(255,255,255,0.05)' }}
+              >
+                Back
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="flex-[2] py-2 text-sm font-bold text-white rounded-lg transition-all active:scale-95"
+                style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
+              >
+                ✓ Confirm & Done
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ─── Completed Card (compact) ─────────────────────────────────────────────────
+
+function CompletedCard({ post }: { post: Post }) {
+  const colors = PLATFORM_COLORS[post.platform];
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 rounded-xl opacity-60"
+      style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.05)' }}>
+      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+      <span className="text-sm">{PLATFORM_ICON[post.platform]}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-white truncate">
+          {PLATFORM_LABEL[post.platform]} {POST_TYPE_LABEL[post.postType]}
+        </p>
+        <p className="text-[10px] text-zinc-500">
+          Posted {post.completedAt ? format(parseISO(post.completedAt), 'h:mm a') : ''}
+        </p>
+      </div>
+      {post.postedUrl && (
+        <a
+          href={post.postedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 text-[11px] font-semibold text-violet-400 hover:text-violet-300 flex-shrink-0"
+        >
+          View <ExternalLink className="w-3 h-3" />
+        </a>
+      )}
     </div>
   );
 }
@@ -226,85 +396,127 @@ function TaskCard({ post, onDownloadAsset, onMarkAsPosted }: TaskCardProps) {
 
 export default function VATaskQueue() {
   const { models, selectedModelId, posts, currentUser, updatePost } = useStore();
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const selectedModel = models.find((m) => m.id === selectedModelId);
 
-  const assignedPosts = useMemo(() => {
-    if (!selectedModel || !currentUser) return [];
-    return posts
-      .filter(
-        (p) =>
-          p.modelId === selectedModel.id &&
-          p.status === 'scheduled' &&
-          (!p.assignedVaId || p.assignedVaId === currentUser.id)
-      )
-      .sort((a, b) => new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime());
+  const { pending, completed } = useMemo(() => {
+    if (!selectedModel || !currentUser) return { pending: [], completed: [] };
+    const modelPosts = posts.filter(
+      (p) =>
+        p.modelId === selectedModel.id &&
+        (!p.assignedVaId || p.assignedVaId === currentUser.id)
+    ).sort((a, b) => new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime());
+
+    return {
+      pending: modelPosts.filter((p) => p.status !== 'completed'),
+      completed: modelPosts.filter((p) => p.status === 'completed'),
+    };
   }, [selectedModel, posts, currentUser]);
 
-  const handleDownloadAsset = (post: Post, assetIndex?: number) => {
-    const assets = assetIndex !== undefined ? [post.assets[assetIndex]] : post.assets;
-    assets.forEach((asset) => {
-      const time = format(new Date(post.scheduledTime), 'HHmm');
-      const date = format(new Date(post.scheduledTime), 'MMdd');
-      let filename = '';
-      if (post.postType === 'instagram_post') filename = `Instagram_Post_${date}_${time}_${asset.order}of${post.assets.length}.jpg`;
-      else if (post.postType === 'instagram_reel') filename = `Instagram_Reel_${date}_${time}.mp4`;
-      else if (post.postType === 'tiktok_reel') filename = `TikTok_Reel_${date}_${time}.mp4`;
-      else if (post.postType === 'tiktok_slideshow') filename = `TikTok_Slide_${date}_${time}_${asset.order}of${post.assets.length}.jpg`;
-      else if (post.postType === 'x_post') filename = `X_Post_${date}_${time}_${asset.order}.jpg`;
-      else if (post.postType === 'threads_post') filename = `Threads_Post_${date}_${time}_${asset.order}.jpg`;
-      console.log(`Downloading: ${filename}`);
-      alert(`Would download: ${filename}\nWith EXIF metadata spoofed to ${selectedModel?.exifPreset.device}`);
-    });
-  };
+  const overdue = pending.filter((p) => isPast(parseISO(p.scheduledTime)));
+  const upcoming = pending.filter((p) => !isPast(parseISO(p.scheduledTime)));
 
-  const handleMarkAsPosted = (postId: string) => {
+  const handleComplete = useCallback((postId: string, postedUrl: string) => {
     updatePost(postId, {
       status: 'completed',
       completedAt: new Date().toISOString(),
       completedBy: currentUser?.id,
+      postedUrl,
     });
-  };
+  }, [updatePost, currentUser]);
 
   if (!selectedModel) {
     return (
-      <div className="flex items-center justify-center h-64 text-slate-500">
-        <p>Please select a model to view tasks</p>
+      <div className="flex items-center justify-center h-64 text-zinc-500">
+        <p>No model assigned</p>
       </div>
     );
   }
 
-  if (assignedPosts.length === 0) {
+  if (pending.length === 0 && completed.length === 0) {
     return (
-      <div className="card flex flex-col items-center justify-center py-16 text-center">
-        <CheckCircle className="w-12 h-12 text-green-500/50 mb-3" />
-        <p className="text-slate-300 font-medium">All caught up!</p>
-        <p className="text-slate-500 text-sm mt-1">No pending posts for {selectedModel.name}</p>
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
+        <CheckCircle2 className="w-14 h-14 text-green-500/40" />
+        <p className="text-white font-bold text-lg">All done!</p>
+        <p className="text-zinc-500 text-sm">No pending posts for {selectedModel.name}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-white">
-          {selectedModel.profileImage} {selectedModel.name}
-        </h2>
-        <span className="text-sm text-slate-400">
-          {assignedPosts.length} post{assignedPosts.length !== 1 ? 's' : ''} pending
-        </span>
+        <div>
+          <h2 className="text-base font-bold text-white">
+            {selectedModel.profileImage} {selectedModel.name}
+          </h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            {pending.length > 0
+              ? `${pending.length} post${pending.length !== 1 ? 's' : ''} to publish`
+              : 'All posted today'}
+          </p>
+        </div>
+        {overdue.length > 0 && (
+          <div className="flex items-center gap-1.5 text-xs font-bold text-red-400 px-3 py-1.5 rounded-lg"
+            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <AlertCircle className="w-3.5 h-3.5" />
+            {overdue.length} overdue
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {assignedPosts.map((post) => (
-          <TaskCard
-            key={post.id}
-            post={post}
-            onDownloadAsset={handleDownloadAsset}
-            onMarkAsPosted={handleMarkAsPosted}
-          />
-        ))}
-      </div>
+      {/* Overdue posts first */}
+      {overdue.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <p className="text-xs font-bold text-red-400 uppercase tracking-wider">Overdue</p>
+          </div>
+          {overdue.map((post) => (
+            <TaskCard key={post.id} post={post} onComplete={handleComplete} />
+          ))}
+        </div>
+      )}
+
+      {/* Upcoming posts */}
+      {upcoming.length > 0 && (
+        <div className="space-y-4">
+          {overdue.length > 0 && (
+            <div className="flex items-center gap-2 mt-2">
+              <div className="w-2 h-2 rounded-full bg-violet-500" />
+              <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Upcoming</p>
+            </div>
+          )}
+          {upcoming.map((post) => (
+            <TaskCard key={post.id} post={post} onComplete={handleComplete} />
+          ))}
+        </div>
+      )}
+
+      {/* Completed today (collapsible) */}
+      {completed.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowCompleted((v) => !v)}
+            className="w-full flex items-center justify-between py-2 px-1 text-xs font-semibold text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+              {completed.length} completed
+            </div>
+            {showCompleted ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+          {showCompleted && (
+            <div className="space-y-2 mt-2">
+              {completed.map((post) => (
+                <CompletedCard key={post.id} post={post} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
