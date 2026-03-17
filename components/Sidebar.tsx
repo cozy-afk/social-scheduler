@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useStore, getVisibleModels } from '@/lib/store';
 import {
   LayoutGrid, Calendar, FileText, Users, BarChart2,
-  TrendingUp, Settings, Zap, ChevronDown, CalendarCheck,
+  TrendingUp, Settings, Zap, ChevronDown, CalendarCheck, Copy,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: '/', icon: Calendar, label: 'Calendar' },
   { href: '/captions', icon: FileText, label: 'Captions' },
   { href: '/models', icon: Users, label: 'Models' },
+  { href: '/clone-reel', icon: Copy, label: 'Clone Reel' },
   { href: '/analytics', icon: BarChart2, label: 'Analytics' },
   { href: '/research', icon: TrendingUp, label: 'Research' },
   { href: '/settings', icon: Settings, label: 'Settings' },
