@@ -82,6 +82,7 @@ export interface Model {
   postingFrequency: PostingFrequencyConfig[];
   assignedVaIds: string[];      // which VA user IDs can access this model
   status: 'active' | 'paused';
+  timezone?: string;            // IANA timezone, e.g. 'Europe/London', 'America/New_York'
   createdAt: string;
   metaConnection?: MetaConnection;
   fanvueConnection?: FanvueConnection;
@@ -93,6 +94,7 @@ export interface TimeSlot {
   platform: Platform;
   postType: PostType;
   recurrence: 'daily' | 'weekdays' | 'weekends';
+  contentType?: 'reel' | 'carousel' | 'story' | 'post';
 }
 
 export interface User {
@@ -185,8 +187,9 @@ export type PostReferencePlatform = 'instagram' | 'tiktok' | 'threads' | 'x' | '
 export interface PostReference {
   id: string;
   coverImageUrl: string | null;
-  caption: string;
-  description: string;
+  caption: string;          // Hook / first line of post body
+  description: string;      // Full post body / caption
+  imageCaption?: string;    // Text overlay directly on the image
   sourceUrl?: string;
   sourcePlatform: PostReferencePlatform;
   createdAt: string;
@@ -248,4 +251,16 @@ export interface PostRequirement {
   postType: PostType;
   status: PostStatus;
   post?: Post;
+}
+
+// ─── Niche Intelligence / Market Research ────────────────────────────────────
+
+export interface ResearchGroup {
+  id: string;
+  name: string;              // e.g. "Fitness Niche"
+  description?: string;
+  hashtags: string[];        // e.g. ["fitness", "gym", "workout"] — no # prefix
+  handles: string[];         // e.g. ["therock", "cbum"] — no @ prefix
+  createdAt: string;
+  updatedAt: string;
 }

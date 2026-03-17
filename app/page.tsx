@@ -3,12 +3,11 @@
 import { useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { mockModels, mockAdmin, mockPosts, mockCaptions, mockVAUsers } from '@/lib/mockData';
-import AppHeader from '@/components/AppHeader';
 import CalendarView from '@/components/CalendarView';
 import CreatePostModal from '@/components/CreatePostModal';
 
 export default function AdminPage() {
-  const { setModels, setSelectedModelId, setCurrentUser, setPosts, setCaptions, setVAUsers } = useStore();
+  const { setModels, setSelectedModelId, setCurrentUser, setPosts, setCaptions, setVAUsers, showCreatePostModal } = useStore();
 
   useEffect(() => {
     setModels(mockModels);
@@ -20,12 +19,11 @@ export default function AdminPage() {
   }, [setModels, setSelectedModelId, setCurrentUser, setPosts, setCaptions, setVAUsers]);
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <AppHeader activePage="calendar" />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="min-h-screen p-6">
+      <div className="max-w-7xl mx-auto">
         <CalendarView />
-      </main>
-      <CreatePostModal />
+      </div>
+      {showCreatePostModal && <CreatePostModal />}
     </div>
   );
 }

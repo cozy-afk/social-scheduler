@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import {
   Model, User, Post, Caption, GalleryAsset, VAMagicLink,
   PostReference, StagedAsset, StagedVariant, WorkflowStep, EditingTarget, CropRatio,
-  Agency,
+  Agency, ResearchGroup,
 } from '@/types/models';
 import { S3Config, MetaConfig, FanvueConfig } from '@/types/integrations';
 
@@ -101,6 +101,13 @@ interface AppState {
   clearStaging: () => void;
   editingTarget: EditingTarget | null;
   setEditingTarget: (target: EditingTarget | null) => void;
+
+  // Research Groups
+  researchGroups: ResearchGroup[];
+  setResearchGroups: (groups: ResearchGroup[]) => void;
+  addResearchGroup: (group: ResearchGroup) => void;
+  updateResearchGroup: (id: string, updates: Partial<ResearchGroup>) => void;
+  deleteResearchGroup: (id: string) => void;
 
   // UI state
   showCreatePostModal: boolean;
@@ -254,6 +261,17 @@ export const useStore = create<AppState>((set) => ({
   clearStaging: () => set({ stagedAssets: [], workflowStep: 'gallery', editingTarget: null }),
   editingTarget: null,
   setEditingTarget: (target) => set({ editingTarget: target }),
+
+  // Research Groups
+  researchGroups: [],
+  setResearchGroups: (groups) => set({ researchGroups: groups }),
+  addResearchGroup: (group) => set((state) => ({ researchGroups: [...state.researchGroups, group] })),
+  updateResearchGroup: (id, updates) =>
+    set((state) => ({
+      researchGroups: state.researchGroups.map((g) => (g.id === id ? { ...g, ...updates } : g)),
+    })),
+  deleteResearchGroup: (id) =>
+    set((state) => ({ researchGroups: state.researchGroups.filter((g) => g.id !== id) })),
 
   // UI
   showCreatePostModal: false,

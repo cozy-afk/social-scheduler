@@ -3,15 +3,16 @@
 import { useStore } from '@/lib/store';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
-  X, Sparkles, Upload, Check, Info, Film, Image as ImageIcon,
-  AlertTriangle, Plus, ChevronLeft, ChevronRight, Heart, MessageCircle,
-  Send, Bookmark, MoreHorizontal, Repeat2, Library, Loader2, Pencil,
+  X, Sparkles, Upload, Check, Film,
+  AlertTriangle, Loader2, Pencil, AlignLeft, AlignCenter, AlignRight,
 } from 'lucide-react';
-import { PostType, Platform, Asset, Caption } from '@/types/models';
-import { checkImageAspectRatios } from '@/lib/ar-checker';
+import { PostType, Platform, Caption } from '@/types/models';
 import type { ARCheckResult, PostFormat, MediaItem } from '@/types/utils';
-import ImageEditor, { EditableImage, FilterState, OverlayItem, ImageEditorResult } from './ImageEditor';
-import { PLATFORM_THEMES, getPostTypeForPlatformAndRatio } from '@/lib/constants/platform';
+import ImageEditor, { ImageEditorResult } from './ImageEditor';
+import { PLATFORM_THEMES } from '@/lib/constants/platform';
+import {
+  FontKey, StrokeKey, EDITOR_FONTS, EDITOR_STROKES, EDITOR_COLORS, getTextShadow,
+} from '@/lib/constants/editor';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -68,8 +69,8 @@ function LibraryPicks({ captions, postType, onSelect }: {
   if (relevant.length === 0) return null;
   return (
     <div className="mt-2">
-      <p className="text-[10px] text-slate-500 mb-1.5 flex items-center gap-1">
-        <Library className="w-3 h-3" /> From library:
+      <p className="text-[10px] text-slate-500 mb-1.5">
+        From library:
       </p>
       <div className="flex flex-wrap gap-1.5">
         {relevant.map((c) => (
@@ -134,7 +135,7 @@ function MediaItemCard({ item, index, onRemove, onEdit, arCheck }: MediaItemCard
       {arCheck && !arCheck.valid && (
         <div className="absolute top-1 left-1 flex items-center gap-1 bg-yellow-500/90 text-black text-[9px] px-1.5 py-0.5 rounded">
           <AlertTriangle className="w-2.5 h-2.5" />
-          {arCheck.message}
+          {arCheck.violations[0]?.displayRatio ?? 'Bad ratio'}
         </div>
       )}
 
@@ -146,18 +147,47 @@ function MediaItemCard({ item, index, onRemove, onEdit, arCheck }: MediaItemCard
   );
 }
 
-// ─── Platform Post Section ──────────────────────────────────────────────────────
+// ─── Caption style ────────────────────────────────────────────────────────────
+
+export interface CaptionStyle {
+  font: FontKey;
+  fontSize: number;
+  stroke: StrokeKey;
+  color: string;
+  vAlign: 'top' | 'middle' | 'bottom';
+  hAlign: 'left' | 'center' | 'right';
+}
+
+const DEFAULT_CAPTION_STYLE: CaptionStyle = {
+  font: 'classic', fontSize: 20, stroke: 'light', color: '#FFFFFF',
+  vAlign: 'bottom', hAlign: 'center',
+};
+
+const FONT_ORDER: FontKey[] = ['classic', 'modern', 'neon', 'typewriter', 'strong'];
+const STROKE_ORDER: StrokeKey[] = ['none', 'light', 'bold', 'white'];
+
+function positionToStyle(vAlign: CaptionStyle['vAlign'], hAlign: CaptionStyle['hAlign']): React.CSSProperties {
+  const v = vAlign === 'top' ? { top: '8%' } : vAlign === 'bottom' ? { bottom: '8%' } : { top: '50%', transform: 'translateY(-50%)' };
+  const textAlign = hAlign === 'left' ? 'left' : hAlign === 'right' ? 'right' : 'center';
+  const h = hAlign === 'left' ? { left: '5%', right: '5%' } : hAlign === 'right' ? { right: '5%', left: '5%' } : { left: '5%', right: '5%' };
+  return { position: 'absolute', ...v, ...h, textAlign, zIndex: 10 };
+}
+
+// ─── Platform Post Section ────────────────────────────────────────────────────
 
 interface PlatformPostSectionProps {
   platform: Platform;
   postType: PostType;
   scheduledTime: string;
   onTimeChange: (time: string) => void;
+  imageCaption: string;
+  onImageCaptionChange: (text: string) => void;
+  captionStyle: CaptionStyle;
+  onCaptionStyleChange: (style: CaptionStyle) => void;
   description: string;
   onDescriptionChange: (text: string) => void;
-  onSchedule: () => void;
-  onSkip: () => void;
-  isScheduled: boolean;
+  previewMediaUrl?: string;
+  captions: Caption[];
 }
 
 function PlatformPostSection({
@@ -165,67 +195,309 @@ function PlatformPostSection({
   postType,
   scheduledTime,
   onTimeChange,
+  imageCaption,
+  onImageCaptionChange,
+  captionStyle,
+  onCaptionStyleChange,
   description,
   onDescriptionChange,
-  onSchedule,
-  onSkip,
-  isScheduled,
+  previewMediaUrl,
+  captions,
 }: PlatformPostSectionProps) {
   const style = getPlatformStyle(platform);
+  const theme = PLATFORM_THEMES[platform];
+
+  const patchStyle = (patch: Partial<CaptionStyle>) =>
+    onCaptionStyleChange({ ...captionStyle, ...patch });
+
+  // Caption preview text shadow
+  const textShadow = getTextShadow(captionStyle.font, captionStyle.stroke, captionStyle.color);
+  const fontCfg = EDITOR_FONTS[captionStyle.font];
+
+  // Relevant library captions for this platform
+  const libCaptions = captions.filter((c) => c.platform === platform).slice(0, 8);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const handleAiGenerate = async () => {
+    if (libCaptions.length === 0) {
+      // Fall back to random if no library entries
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const examples = libCaptions.map((c) => c.text).join('\n---\n');
+      const res = await fetch('/api/generate-captions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform,
+          postType,
+          examples,
+          count: 1,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const generated: string = json.captions?.[0] ?? json.caption ?? '';
+        if (generated) onDescriptionChange(generated);
+      } else {
+        // Fallback: pick random from library
+        onDescriptionChange(libCaptions[Math.floor(Math.random() * libCaptions.length)].text);
+      }
+    } catch {
+      // Fallback: pick random from library
+      if (libCaptions.length > 0) {
+        onDescriptionChange(libCaptions[Math.floor(Math.random() * libCaptions.length)].text);
+      }
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   return (
-    <div className={`rounded-xl overflow-hidden ${style.section}`}>
+    <div className="rounded-xl overflow-hidden border" style={{ borderColor: 'rgba(255,255,255,0.07)', background: 'var(--bg-card)' }}>
       {/* Header */}
-      <div className={`px-4 py-2 flex items-center gap-2 ${style.header}`}>
-        <span className="text-lg">{style.icon}</span>
-        <span className="font-semibold text-sm">{style.label}</span>
-        <span className="text-xs opacity-75">· {postType.replace(platform + '_', ' ')}</span>
+      <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${theme.bgDim} ${theme.text}`}>
+          {style.icon} {style.label}
+        </span>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          · {postType.replace(platform + '_', '')}
+        </span>
       </div>
 
-      {/* Content */}
-      <div className="p-4 space-y-3">
-        {/* Schedule time */}
-        <div>
-          <label className="text-xs text-slate-400 mb-1 block">Schedule Time</label>
-          <input
-            type="datetime-local"
-            value={scheduledTime}
-            onChange={(e) => onTimeChange(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      <div className="p-4 flex gap-4">
+        {/* ── Controls (left) ── */}
+        <div className="flex-1 min-w-0 space-y-3">
+
+          {/* Time */}
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-semibold mb-1 block" style={{ color: 'var(--text-muted)' }}>
+              Schedule Time
+            </label>
+            <input
+              type="datetime-local"
+              value={scheduledTime}
+              onChange={(e) => onTimeChange(e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.08)' }}
+            />
+          </div>
+
+          {/* Caption (image overlay) */}
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-semibold mb-1 block" style={{ color: 'var(--text-muted)' }}>
+              Caption <span style={{ color: 'var(--accent-violet)', opacity: 0.8 }}>(overlaid on image)</span>
+            </label>
+            <input
+              type="text"
+              value={imageCaption}
+              onChange={(e) => onImageCaptionChange(e.target.value)}
+              placeholder="Text displayed over the image…"
+              className="w-full rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none"
+              style={{
+                background: 'var(--bg-elevated)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                fontFamily: fontCfg.family,
+                color: captionStyle.color,
+                textShadow,
+              }}
+            />
+
+            {/* Font picker */}
+            <div className="flex gap-1.5 mt-2 overflow-x-auto no-scrollbar">
+              {FONT_ORDER.map((fk) => {
+                const fc = EDITOR_FONTS[fk];
+                const sel = captionStyle.font === fk;
+                return (
+                  <button
+                    key={fk}
+                    type="button"
+                    onClick={() => patchStyle({ font: fk })}
+                    className="flex-shrink-0 w-12 h-10 rounded-lg flex items-center justify-center text-base font-bold transition-all"
+                    style={{
+                      fontFamily: fc.family,
+                      fontWeight: fc.weight,
+                      background: sel ? 'rgba(124,58,237,0.18)' : 'rgba(255,255,255,0.05)',
+                      border: `1.5px solid ${sel ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.07)'}`,
+                      color: '#fff',
+                      textShadow: fk === 'neon' ? '0 0 8px #A78BFA' : undefined,
+                      ...fc.extraStyle,
+                    }}
+                    title={fc.label}
+                  >
+                    Aa
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Stroke + color row */}
+            <div className="flex items-center gap-3 mt-2">
+              {/* Stroke */}
+              <div className="flex gap-1">
+                {STROKE_ORDER.map((sk) => {
+                  const sel = captionStyle.stroke === sk;
+                  return (
+                    <button
+                      key={sk}
+                      type="button"
+                      onClick={() => patchStyle({ stroke: sk })}
+                      title={EDITOR_STROKES[sk].label}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold transition-all"
+                      style={{
+                        background: sel ? 'rgba(124,58,237,0.18)' : 'rgba(255,255,255,0.05)',
+                        border: `1.5px solid ${sel ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.07)'}`,
+                        color: '#fff',
+                        fontFamily: fontCfg.family,
+                        textShadow: EDITOR_STROKES[sk].preview,
+                      }}
+                    >
+                      T
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Colors */}
+              <div className="flex gap-1 flex-1">
+                {EDITOR_COLORS.slice(0, 5).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => patchStyle({ color: c })}
+                    className="w-5 h-5 rounded-full flex-shrink-0 transition-transform"
+                    style={{
+                      background: c,
+                      border: captionStyle.color === c ? '2px solid white' : '2px solid rgba(255,255,255,0.12)',
+                      transform: captionStyle.color === c ? 'scale(1.25)' : 'scale(1)',
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Size */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <input
+                  type="range"
+                  min={12}
+                  max={48}
+                  value={captionStyle.fontSize}
+                  onChange={(e) => patchStyle({ fontSize: Number(e.target.value) })}
+                  className="w-16 accent-violet-500"
+                />
+                <span className="text-[10px] text-zinc-500 w-5">{captionStyle.fontSize}</span>
+              </div>
+            </div>
+
+            {/* Position 3×1 alignment */}
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Position</span>
+              <div className="toggle-group">
+                {(['top', 'middle', 'bottom'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => patchStyle({ vAlign: v })}
+                    className={`toggle-item text-[10px] px-2 capitalize ${captionStyle.vAlign === v ? 'toggle-item-active' : ''}`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+              <div className="toggle-group">
+                {([
+                  { v: 'left'   as const, Icon: AlignLeft   },
+                  { v: 'center' as const, Icon: AlignCenter },
+                  { v: 'right'  as const, Icon: AlignRight  },
+                ]).map(({ v, Icon }) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => patchStyle({ hAlign: v })}
+                    className={`toggle-item px-2 ${captionStyle.hAlign === v ? 'toggle-item-active' : ''}`}
+                  >
+                    <Icon className="w-3 h-3" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Description (post body) */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Description <span style={{ opacity: 0.6 }}>(post body)</span>
+              </label>
+              <div className="flex items-center gap-2">
+                {libCaptions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onDescriptionChange(libCaptions[Math.floor(Math.random() * libCaptions.length)].text)}
+                    className="text-[10px] flex items-center gap-1 transition-colors hover:text-violet-400"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Pick from library
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleAiGenerate}
+                  disabled={aiLoading || libCaptions.length === 0}
+                  className="text-[10px] flex items-center gap-1 transition-colors hover:text-violet-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ color: 'var(--accent-violet)' }}
+                  title={libCaptions.length === 0 ? 'Add captions to library first' : 'Generate in the style of your library'}
+                >
+                  {aiLoading ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3 h-3" />
+                  )}
+                  AI Generate
+                </button>
+              </div>
+            </div>
+            <textarea
+              value={description}
+              onChange={(e) => onDescriptionChange(e.target.value)}
+              rows={3}
+              placeholder={`Write your ${style.label} post body, hashtags, etc…`}
+              className="w-full rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none resize-none"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.08)' }}
+            />
+          </div>
         </div>
 
-        {/* Description */}
-        <div>
-          <label className="text-xs text-slate-400 mb-1 block">Caption / Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => onDescriptionChange(e.target.value)}
-            rows={3}
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            placeholder="Add a caption..."
-          />
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2">
-          {isScheduled ? (
-            <button
-              type="button"
-              onClick={onSkip}
-              className="flex-1 btn-secondary text-xs py-2"
-            >
-              Unschedule
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onSchedule}
-              className="flex-1 btn-primary text-xs py-2"
-            >
-              Schedule Post
-            </button>
-          )}
+        {/* ── Mini overlay preview (right) ── */}
+        <div className="flex-shrink-0 w-28">
+          <p className="text-[9px] uppercase tracking-wider mb-1.5 text-center" style={{ color: 'var(--text-muted)' }}>Preview</p>
+          <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: '4/5', background: 'var(--bg-elevated)' }}>
+            {previewMediaUrl ? (
+              <img src={previewMediaUrl} alt="" className="w-full h-full object-cover" draggable={false} />
+            ) : (
+              <div className="w-full h-full" style={{ background: 'linear-gradient(160deg, #FDE68A 0%, #F97316 40%, #EC4899 70%, #A855F7 100%)' }} />
+            )}
+            {imageCaption && (
+              <div
+                style={{
+                  ...positionToStyle(captionStyle.vAlign, captionStyle.hAlign),
+                  fontFamily: fontCfg.family,
+                  fontSize: Math.max(8, captionStyle.fontSize * 0.42),
+                  fontWeight: fontCfg.weight,
+                  color: captionStyle.color,
+                  textShadow,
+                  lineHeight: 1.25,
+                  padding: '0 4px',
+                  wordBreak: 'break-word',
+                  ...fontCfg.extraStyle,
+                }}
+              >
+                {imageCaption}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -235,28 +507,42 @@ function PlatformPostSection({
 // ─── Main CreatePostModal ─────────────────────────────────────────────────────
 
 interface CreatePostModalProps {
-  onClose: () => void;
+  onClose?: () => void;
 }
 
 export default function CreatePostModal({ onClose }: CreatePostModalProps) {
+  const { setShowCreatePostModal } = useStore();
+
+  // Default onClose to close via store if not provided
+  const handleClose = useCallback(() => {
+    if (onClose) {
+      onClose();
+    } else {
+      setShowCreatePostModal(false);
+    }
+  }, [onClose, setShowCreatePostModal]);
   const { models, selectedModelId, posts, captions, addPost, editingPost, setEditingPost } = useStore();
   const selectedModel = models.find((m) => m.id === selectedModelId);
 
   const [format, setFormat] = useState<PostFormat>('carousel');
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [arCheckResults, setArCheckResults] = useState<Record<number, ARCheckResult>>({});
-  const [globalCaption, setGlobalCaption] = useState('');
-  const [platformData, setPlatformData] = useState<Record<Platform, { scheduledTime: string; description: string; enabled: boolean }>>({
-    instagram: { scheduledTime: '', description: '', enabled: false },
-    tiktok:    { scheduledTime: '', description: '', enabled: false },
-    threads:   { scheduledTime: '', description: '', enabled: false },
-    x:         { scheduledTime: '', description: '', enabled: false },
-    fanvue:    { scheduledTime: '', description: '', enabled: false },
+  const [platformData, setPlatformData] = useState<Record<Platform, {
+    scheduledTime: string;
+    description: string;
+    imageCaption: string;
+    captionStyle: CaptionStyle;
+    enabled: boolean;
+  }>>({
+    instagram: { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
+    tiktok:    { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
+    threads:   { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
+    x:         { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
+    fanvue:    { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
   });
   const [uploading, setUploading] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [editingItem, setEditingItem] = useState<{ index: number; item: MediaItem } | null>(null);
-  const [showLibrary, setShowLibrary] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -264,12 +550,12 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        handleClose();
       }
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [onClose]);
+  }, [handleClose]);
 
   // Initialize from editing post
   useEffect(() => {
@@ -287,7 +573,6 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
           ? 'threads'
           : 'x'
       );
-      setGlobalCaption(editingPost.description);
       setMediaItems(
         editingPost.assets.map((asset) => ({
           id: asset.id,
@@ -300,31 +585,11 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
         }))
       );
       setPlatformData({
-        instagram: {
-          scheduledTime: editingPost.scheduledTime.slice(0, 16),
-          description: editingPost.description,
-          enabled: editingPost.platform === 'instagram',
-        },
-        tiktok: {
-          scheduledTime: editingPost.scheduledTime.slice(0, 16),
-          description: editingPost.description,
-          enabled: editingPost.platform === 'tiktok',
-        },
-        threads: {
-          scheduledTime: editingPost.scheduledTime.slice(0, 16),
-          description: editingPost.description,
-          enabled: editingPost.platform === 'threads',
-        },
-        x: {
-          scheduledTime: editingPost.scheduledTime.slice(0, 16),
-          description: editingPost.description,
-          enabled: editingPost.platform === 'x',
-        },
-        fanvue: {
-          scheduledTime: '',
-          description: '',
-          enabled: false,
-        },
+        instagram: { scheduledTime: editingPost.scheduledTime.slice(0, 16), description: editingPost.description, imageCaption: editingPost.imageCaption ?? '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'instagram' },
+        tiktok:    { scheduledTime: editingPost.scheduledTime.slice(0, 16), description: editingPost.description, imageCaption: editingPost.imageCaption ?? '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'tiktok'    },
+        threads:   { scheduledTime: editingPost.scheduledTime.slice(0, 16), description: editingPost.description, imageCaption: editingPost.imageCaption ?? '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'threads'   },
+        x:         { scheduledTime: editingPost.scheduledTime.slice(0, 16), description: editingPost.description, imageCaption: editingPost.imageCaption ?? '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'x'         },
+        fanvue:    { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
       });
     }
   }, [editingPost]);
@@ -336,12 +601,9 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
       Object.fromEntries(
         Object.entries(prev).map(([platform, data]) => [
           platform,
-          {
-            ...data,
-            enabled: formatConfig.platforms.includes(platform as Platform),
-          },
+          { ...data, enabled: formatConfig.platforms.includes(platform as Platform) },
         ])
-      )
+      ) as typeof prev
     );
   }, [format]);
 
@@ -369,17 +631,24 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
 
         // Check aspect ratio for images
         if (!isVideo) {
+          const itemIndex = mediaItems.length + newItems.length;
           const img = new Image();
           img.onload = () => {
             try {
-              const arCheck = checkImageAspectRatios(img.width, img.height, format);
-              if (!arCheck.valid) {
-                newArChecks[mediaItems.length + newItems.length] = arCheck;
+              const ratio = img.width / img.height;
+              const SUPPORTED = [1.0, 0.8];
+              const TOLERANCE = 0.03;
+              const valid = SUPPORTED.some((r) => Math.abs(ratio - r) <= TOLERANCE);
+              if (!valid) {
+                const displayRatio = ratio > 1 ? `${ratio.toFixed(2)}:1` : `1:${(1 / ratio).toFixed(2)}`;
+                setArCheckResults((prev) => ({
+                  ...prev,
+                  [itemIndex]: { valid: false, violations: [{ fileName: file.name, width: img.width, height: img.height, actualRatio: ratio, displayRatio }] },
+                }));
               }
             } catch (error) {
               console.error('AR check failed:', error);
             }
-            setArCheckResults((prev) => ({ ...prev, ...newArChecks }));
           };
           img.src = url;
         }
@@ -448,7 +717,8 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
         postType,
         scheduledTime: data.scheduledTime + ':00',
         status: 'scheduled' as const,
-        description: data.description || globalCaption,
+        description: data.description,
+        imageCaption: data.imageCaption || undefined,
         assets: mediaItems.map((item, idx) => ({
           id: `asset-${Date.now()}-${idx}`,
           postId: editingPost?.id || `post-${Date.now()}-${platform}`,
@@ -472,26 +742,24 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
 
     setScheduling(false);
     setEditingPost(null);
-    onClose();
-  }, [selectedModel, format, platformData, globalCaption, mediaItems, editingPost, addPost, setEditingPost, onClose]);
+    handleClose();
+  }, [selectedModel, format, platformData, mediaItems, editingPost, addPost, setEditingPost, handleClose]);
 
   const hasAnyMedia = mediaItems.length > 0;
   const hasInvalidAr = Object.values(arCheckResults).some((r) => !r.valid);
   const formatConfig = FORMAT_CONFIG[format];
-  const igPostType = FORMAT_TO_IG_POST_TYPE[format];
-  const relevantCaptions = useMemo(() => captions.filter((c) => c.postType === igPostType), [captions, igPostType]);
 
   // Close on Escape key
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
-      onClose();
+      handleClose();
     }
   }, [onClose]);
 
   // Close when clicking backdrop
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
-      onClose();
+      handleClose();
     }
   }, [onClose]);
 
@@ -509,7 +777,7 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
             <h2 className="text-lg font-bold text-white">{editingPost ? 'Edit Post' : 'Create New Post'}</h2>
             <p className="text-xs text-slate-400">Schedule content across multiple platforms</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg p-1.5 transition-colors">
+          <button onClick={handleClose} className="text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg p-1.5 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -602,52 +870,33 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
             )}
           </div>
 
-          {/* Global Caption */}
+          {/* Per-platform sections — each has its own Caption overlay + Description */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-slate-300">Caption</label>
-              <button
-                type="button"
-                onClick={() => setShowLibrary(!showLibrary)}
-                className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1"
-              >
-                <Sparkles className="w-3 h-3" />
-                AI Generate
-              </button>
+            <label className="text-sm font-semibold text-white mb-3 block">Platform Captions</label>
+            <div className="flex flex-col gap-4">
+              {formatConfig.platforms.map((platform) => (
+                <PlatformPostSection
+                  key={platform}
+                  platform={platform}
+                  postType={formatConfig.postTypeMap[platform]!}
+                  scheduledTime={platformData[platform].scheduledTime}
+                  onTimeChange={(time) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], scheduledTime: time } }))}
+                  imageCaption={platformData[platform].imageCaption}
+                  onImageCaptionChange={(text) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], imageCaption: text } }))}
+                  captionStyle={platformData[platform].captionStyle}
+                  onCaptionStyleChange={(style) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], captionStyle: style } }))}
+                  description={platformData[platform].description}
+                  onDescriptionChange={(text) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], description: text } }))}
+                  previewMediaUrl={mediaItems[0]?.type === 'image' ? mediaItems[0]?.url : undefined}
+                  captions={captions}
+                />
+              ))}
             </div>
-
-            <textarea
-              value={globalCaption}
-              onChange={(e) => setGlobalCaption(e.target.value)}
-              rows={3}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              placeholder="Write a caption for your post..."
-            />
-
-            {showLibrary && <LibraryPicks captions={relevantCaptions} postType={igPostType} onSelect={setGlobalCaption} />}
-          </div>
-
-          {/* Platform Sections */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {formatConfig.platforms.map((platform) => (
-              <PlatformPostSection
-                key={platform}
-                platform={platform}
-                postType={formatConfig.postTypeMap[platform]!}
-                scheduledTime={platformData[platform].scheduledTime}
-                onTimeChange={(time) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], scheduledTime: time } }))}
-                description={platformData[platform].description || globalCaption}
-                onDescriptionChange={(text) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], description: text } }))}
-                onSchedule={() => {}}
-                onSkip={() => {}}
-                isScheduled={!!platformData[platform].scheduledTime}
-              />
-            ))}
           </div>
 
           {/* Schedule Button */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-700">
-            <button type="button" onClick={onClose} className="btn-secondary text-sm py-2 px-4">
+            <button type="button" onClick={handleClose} className="btn-secondary text-sm py-2 px-4">
               Cancel
             </button>
             <button
@@ -675,9 +924,9 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
       {/* Image Editor Modal */}
       {editingItem && (
         <ImageEditor
-          imageUrl={editingItem.item.url}
-          onSave={handleImageEditorSave}
-          onClose={handleImageEditorClose}
+          item={{ id: editingItem.item.id, url: editingItem.item.url, name: editingItem.item.name, type: editingItem.item.type }}
+          onDone={handleImageEditorSave}
+          onCancel={handleImageEditorClose}
           initialFilters={editingItem.item.filters}
           initialOverlays={editingItem.item.overlays}
         />

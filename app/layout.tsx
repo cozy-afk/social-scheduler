@@ -1,22 +1,26 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import Sidebar from '@/components/Sidebar';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Social Scheduler - OnlyFans Management',
-  description: 'Multi-platform social media scheduling for OnlyFans creators',
+  title: 'CreatorFlow',
+  description: 'Multi-platform social media scheduling for creators',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.className} bg-slate-950 text-slate-100 antialiased`}>{children}</body>
+      <body className={`${inter.className} antialiased`} style={{ background: '#09090B', color: '#FAFAFA' }}>
+        <div className="app-layout">
+          <Sidebar />
+          <main className="app-main">
+            {children}
+          </main>
+        </div>
+      </body>
     </html>
   );
 }

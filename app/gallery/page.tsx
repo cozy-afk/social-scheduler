@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useStore } from '@/lib/store';
 import { mockModels, mockAdmin, mockGalleryAssets } from '@/lib/mockData';
-import AppHeader from '@/components/AppHeader';
 import CreatePostModal from '@/components/CreatePostModal';
 import StagingView from '@/components/StagingView';
 import ImageEditor, { EditableImage, ImageEditorResult } from '@/components/ImageEditor';
@@ -14,8 +13,8 @@ import {
   Upload, Check, X, Film, Image as ImageIcon,
   HardDrive, Search, FolderOpen,
   Eye, Loader2, RefreshCw, Heart, MessageCircle, Bookmark,
-  Send, MoreHorizontal, Play, Music2, Layers,
-  Grid3X3, List, Rows3,
+  Send, Play, Music2, Layers,
+  Grid3X3, List, Rows3, CheckCheck, ThumbsUp, CalendarCheck,
 } from 'lucide-react';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -50,11 +49,17 @@ interface IGPost {
 function AssetThumbnail({
   asset,
   selected,
+  approved,
+  isPosted,
   onToggle,
+  onApprove,
 }: {
   asset: GalleryAsset;
   selected: boolean;
+  approved: boolean;
+  isPosted: boolean;
   onToggle: () => void;
+  onApprove: (e: React.MouseEvent) => void;
 }) {
   const isOkRatio = asset.aspectRatio
     ? Math.abs(asset.aspectRatio - 1.0) < 0.03 || Math.abs(asset.aspectRatio - 0.8) < 0.03
@@ -64,9 +69,13 @@ function AssetThumbnail({
     <div
       onClick={onToggle}
       className={`relative group aspect-square cursor-pointer rounded-xl overflow-hidden border-2 transition-all duration-150 ${
-        selected
-          ? 'border-blue-500 shadow-blue-500/30 shadow-lg'
-          : 'border-slate-700 hover:border-slate-500'
+        approved
+          ? 'border-green-500 shadow-green-500/20 shadow-lg'
+          : selected
+          ? 'border-violet-500 shadow-violet-500/30 shadow-lg'
+          : isPosted
+          ? 'border-emerald-600/60 hover:border-emerald-500'
+          : 'border-white/10 hover:border-white/20'
       }`}
     >
       <div className="w-full h-full bg-slate-800 flex items-center justify-center">
@@ -79,16 +88,54 @@ function AssetThumbnail({
         )}
       </div>
 
-      <div className={`absolute inset-0 transition-all duration-150 ${selected ? 'bg-blue-500/20' : 'group-hover:bg-slate-800/30'}`} />
+      {/* Posted overlay */}
+      {isPosted && !selected && !approved && (
+        <div className="absolute inset-0 bg-black/40" />
+      )}
 
+      {/* Approved tint */}
+      {approved && <div className="absolute inset-0 bg-green-500/10" />}
+
+      <div className={`absolute inset-0 transition-all duration-150 ${selected ? 'bg-violet-500/20' : 'group-hover:bg-black/20'}`} />
+
+      {/* Select checkbox */}
       <div className={`absolute top-2 left-2 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-        selected ? 'bg-blue-600 border-blue-500' : 'bg-slate-900/70 border-slate-500 opacity-0 group-hover:opacity-100'
+        selected ? 'bg-violet-600 border-violet-500' : 'bg-black/60 border-white/30 opacity-0 group-hover:opacity-100'
       }`}>
         {selected && <Check className="w-3 h-3 text-white" />}
       </div>
 
-      {asset.fileType === 'video' && (
-        <div className="absolute top-2 right-2 bg-slate-900/80 rounded px-1.5 py-0.5">
+      {/* Quick approve button — top right (visible on hover, or always when approved) */}
+      <button
+        onClick={onApprove}
+        title={approved ? 'Remove approval' : 'Approve for scheduling'}
+        className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+          approved
+            ? 'bg-green-500 opacity-100'
+            : 'bg-black/60 opacity-0 group-hover:opacity-100 hover:bg-green-500/80'
+        }`}
+      >
+        <ThumbsUp className="w-3 h-3 text-white" />
+      </button>
+
+      {/* Posted badge */}
+      {isPosted && !approved && (
+        <div className="absolute bottom-8 right-1 flex items-center gap-0.5 bg-emerald-600/90 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold">
+          <CheckCheck className="w-2.5 h-2.5" />
+          Posted
+        </div>
+      )}
+
+      {/* Approved badge */}
+      {approved && (
+        <div className="absolute bottom-8 right-1 flex items-center gap-0.5 bg-green-500 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold">
+          <Check className="w-2.5 h-2.5" />
+          Approved
+        </div>
+      )}
+
+      {asset.fileType === 'video' && !isPosted && !approved && (
+        <div className="absolute top-2 right-2 bg-black/60 rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <Film className="w-3 h-3 text-slate-300" />
         </div>
       )}
@@ -99,7 +146,7 @@ function AssetThumbnail({
         {formatRatio(asset.aspectRatio)}
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-900/90 to-transparent px-2 py-2 translate-y-full group-hover:translate-y-0 transition-transform">
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent px-2 py-2 translate-y-full group-hover:translate-y-0 transition-transform">
         <p className="text-[10px] text-slate-200 truncate">{asset.fileName}</p>
         {asset.sizeBytes && <p className="text-[9px] text-slate-400">{formatBytes(asset.sizeBytes)}</p>}
       </div>
@@ -198,7 +245,7 @@ function InstagramFeedPreview({
         </div>
         <div className="flex gap-2">
           <span className="bg-slate-800 border border-slate-600 text-white text-[10px] px-2.5 py-1 rounded-lg font-medium">Follow</span>
-          <MoreHorizontal className="w-5 h-5 text-white" />
+          <span className="w-5 h-5 text-slate-400 flex items-center justify-center text-xs">•••</span>
         </div>
       </div>
 
@@ -233,7 +280,7 @@ function InstagramFeedPreview({
               )}
             </div>
             <div className="absolute inset-0 bg-blue-500/20" />
-            <span className="absolute top-1 left-1 bg-blue-500 text-white text-[8px] px-1 py-0.5 rounded font-bold">NEW</span>
+            <span className="absolute top-1 left-1 bg-violet-500 text-white text-[8px] px-1 py-0.5 rounded font-bold">NEW</span>
             {asset.fileType === 'video' && (
               <Play className="absolute bottom-1 right-1 w-3 h-3 text-white" />
             )}
@@ -334,7 +381,7 @@ function TikTokFeedPreview({
           </div>
 
           {/* NEW badge */}
-          <div className="absolute top-2 left-2 bg-blue-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold">
+          <div className="absolute top-2 left-2 bg-violet-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold">
             SCHEDULED
           </div>
 
@@ -454,7 +501,7 @@ function FeedPreviewPanel({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Eye className="w-5 h-5 text-blue-400" />
+          <Eye className="w-5 h-5 text-violet-400" />
           <h3 className="font-semibold text-white text-sm">Feed Preview</h3>
         </div>
         <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors p-1">
@@ -469,7 +516,7 @@ function FeedPreviewPanel({
             key={p}
             onClick={() => setPlatform(p)}
             className={`flex-1 py-1.5 rounded-md text-xs font-medium capitalize transition-all ${
-              platform === p ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              platform === p ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             {p === 'instagram' ? '📸 Instagram' : '🎵 TikTok'}
@@ -524,10 +571,24 @@ export default function GalleryPage() {
     galleryAssets, setGalleryAssets, addGalleryAsset,
     setShowCreatePostModal, setPreloadedGalleryAssets, showCreatePostModal,
     setStagedAssets, workflowStep, editingTarget, setEditingTarget,
-    updateStagedVariant, setWorkflowStep, stagedAssets,
+    updateStagedVariant, setWorkflowStep, stagedAssets, posts,
   } = useStore();
 
+  // Build a set of fileUrls that have been used in completed posts
+  const postedUrlSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const post of posts) {
+      if (post.status === 'completed') {
+        for (const asset of post.assets) {
+          if (asset.fileUrl) set.add(asset.fileUrl);
+        }
+      }
+    }
+    return set;
+  }, [posts]);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<'all' | 'image' | 'video'>('all');
   const [search, setSearch] = useState('');
   const [showFeedPreview, setShowFeedPreview] = useState(false);
@@ -576,6 +637,24 @@ export default function GalleryPage() {
     clearSelection();
   };
 
+  const toggleApprove = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setApprovedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleScheduleApproved = () => {
+    const approved = galleryAssets.filter((a) => approvedIds.has(a.id));
+    if (approved.length === 0) return;
+    setStagedAssets(approved);
+    // Override workflowStep to skip staging and go straight to scheduling
+    setWorkflowStep('scheduling');
+    setApprovedIds(new Set());
+  };
+
   const handleEditVariant = useCallback((assetId: string, ratio: CropRatio) => {
     setEditingTarget({ assetId, ratio });
     setWorkflowStep('editing');
@@ -618,6 +697,7 @@ export default function GalleryPage() {
 
   const imageCount = galleryAssets.filter((a) => a.fileType === 'image').length;
   const videoCount = galleryAssets.filter((a) => a.fileType === 'video').length;
+  const postedCount = galleryAssets.filter((a) => postedUrlSet.has(a.fileUrl)).length;
   const arIssues = galleryAssets.filter((a) => {
     if (!a.aspectRatio || a.fileType === 'video') return false;
     return Math.abs(a.aspectRatio - 1.0) > 0.03 && Math.abs(a.aspectRatio - 0.8) > 0.03;
@@ -626,10 +706,9 @@ export default function GalleryPage() {
   const selectedAssets = galleryAssets.filter((a) => selectedIds.has(a.id));
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen">
       <AutoPublisher />
-      <AppHeader activePage="gallery" />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-7xl mx-auto px-6 py-6">
         <div className={`flex gap-6 ${showFeedPreview ? 'lg:flex-row flex-col' : 'flex-col'}`}>
           {/* Left: gallery content */}
           <div className="flex-1 min-w-0 space-y-5">
@@ -639,7 +718,7 @@ export default function GalleryPage() {
                 <h2 className="text-xl font-bold text-white">Content Gallery</h2>
                 <p className="text-sm text-slate-400 mt-0.5">
                   {galleryAssets.length} assets · {imageCount} images · {videoCount} videos
-                  {arIssues > 0 && <span className="text-amber-400 ml-2">⚠ {arIssues} need cropping</span>}
+                  {postedCount > 0 && <span className="text-emerald-400 ml-2">· {postedCount} already posted</span>}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -647,7 +726,7 @@ export default function GalleryPage() {
                   onClick={() => setShowFeedPreview(!showFeedPreview)}
                   className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg border transition-all ${
                     showFeedPreview
-                      ? 'bg-blue-600 border-blue-500 text-white'
+                      ? 'bg-violet-600 border-violet-500 text-white'
                       : 'btn-secondary'
                   }`}
                 >
@@ -666,14 +745,14 @@ export default function GalleryPage() {
                 <div className="flex items-center gap-0.5 bg-slate-800 border border-slate-700 rounded-lg p-1">
                   <button
                     onClick={() => setViewMode('grid')}
-                    className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                     title="Grid view"
                   >
                     <Grid3X3 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setViewMode('list')}
-                    className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                     title="List view"
                   >
                     <List className="w-4 h-4" />
@@ -688,7 +767,7 @@ export default function GalleryPage() {
                 { label: 'Total Assets', value: galleryAssets.length, color: 'text-slate-200', icon: <FolderOpen className="w-4 h-4" /> },
                 { label: 'Images', value: imageCount, color: 'text-pink-400', icon: <ImageIcon className="w-4 h-4" /> },
                 { label: 'Videos', value: videoCount, color: 'text-red-400', icon: <Film className="w-4 h-4" /> },
-                { label: 'AR Issues', value: arIssues, color: arIssues > 0 ? 'text-amber-400' : 'text-green-400', icon: <HardDrive className="w-4 h-4" /> },
+                { label: 'Already Posted', value: postedCount, color: postedCount > 0 ? 'text-emerald-400' : 'text-slate-400', icon: <CheckCheck className="w-4 h-4" /> },
               ].map(({ label, value, color, icon }) => (
                 <div key={label} className="card p-3">
                   <div className={`flex items-center gap-1.5 text-xs text-slate-500 mb-1 ${color}`}>{icon}<span>{label}</span></div>
@@ -715,7 +794,7 @@ export default function GalleryPage() {
                     key={f}
                     onClick={() => setFilter(f)}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-all ${
-                      filter === f ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                      filter === f ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
                     {f}
@@ -735,6 +814,23 @@ export default function GalleryPage() {
               {selectedIds.size === 0 && filtered.length > 0 && (
                 <button onClick={selectAll} className="btn-secondary text-sm">Select All</button>
               )}
+              {/* Approve all selected shortcut */}
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={() => {
+                    setApprovedIds((prev) => {
+                      const next = new Set(prev);
+                      selectedIds.forEach((id) => next.add(id));
+                      return next;
+                    });
+                    clearSelection();
+                  }}
+                  className="btn-secondary text-sm flex items-center gap-1.5"
+                >
+                  <ThumbsUp className="w-4 h-4 text-green-400" />
+                  Approve {selectedIds.size}
+                </button>
+              )}
               {/* Thumb size slider — only relevant in grid view */}
               {viewMode === 'grid' && (
                 <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -746,7 +842,7 @@ export default function GalleryPage() {
                     step={1}
                     value={thumbSize}
                     onChange={(e) => setThumbSize(Number(e.target.value))}
-                    className="w-20 accent-blue-500 cursor-pointer"
+                    className="w-20 accent-violet-500 cursor-pointer"
                     title={`Thumbnail size: ${thumbSize}`}
                   />
                 </div>
@@ -774,7 +870,10 @@ export default function GalleryPage() {
                     key={asset.id}
                     asset={asset}
                     selected={selectedIds.has(asset.id)}
+                    approved={approvedIds.has(asset.id)}
+                    isPosted={postedUrlSet.has(asset.fileUrl)}
                     onToggle={() => toggleSelect(asset.id)}
+                    onApprove={(e) => toggleApprove(e, asset.id)}
                   />
                 ))}
               </div>
@@ -795,6 +894,7 @@ export default function GalleryPage() {
                   <tbody>
                     {filtered.map((asset) => {
                       const isSelected = selectedIds.has(asset.id);
+                      const isPostedAsset = postedUrlSet.has(asset.fileUrl);
                       const uploadedLabel = asset.uploadedAt
                         ? new Date(asset.uploadedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
                         : '—';
@@ -807,14 +907,16 @@ export default function GalleryPage() {
                           onClick={() => toggleSelect(asset.id)}
                           className={`border-b border-slate-800 cursor-pointer transition-colors last:border-0 ${
                             isSelected
-                              ? 'bg-blue-500/10 border-blue-500/30'
+                              ? 'bg-violet-500/10 border-violet-500/30'
+                              : isPostedAsset
+                              ? 'bg-emerald-500/5 hover:bg-emerald-500/10'
                               : 'hover:bg-slate-800/50'
                           }`}
                         >
                           {/* Checkbox */}
                           <td className="py-2 pl-3 pr-2">
                             <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
-                              isSelected ? 'bg-blue-600 border-blue-500' : 'border-slate-500'
+                              isSelected ? 'bg-violet-600 border-violet-500' : 'border-slate-500'
                             }`}>
                               {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
                             </div>
@@ -833,7 +935,15 @@ export default function GalleryPage() {
                           </td>
                           {/* File name */}
                           <td className="py-2 px-2 max-w-[180px]">
-                            <p className="text-slate-200 truncate text-sm">{asset.fileName}</p>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <p className="text-slate-200 truncate text-sm">{asset.fileName}</p>
+                              {isPostedAsset && (
+                                <span className="flex-shrink-0 flex items-center gap-0.5 bg-emerald-600/80 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                                  <CheckCheck className="w-2.5 h-2.5" />
+                                  Posted
+                                </span>
+                              )}
+                            </div>
                           </td>
                           {/* Type badge */}
                           <td className="py-2 px-2">
@@ -870,6 +980,45 @@ export default function GalleryPage() {
             )}
           </div>
 
+          {/* ── Approved assets action bar (sticky bottom) ── */}
+          {approvedIds.size > 0 && (
+            <div
+              className="sticky bottom-6 z-30 flex items-center justify-between gap-4 rounded-2xl px-5 py-3.5 shadow-2xl"
+              style={{
+                background: 'rgba(17,17,17,0.92)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(34,197,94,0.3)',
+                boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(34,197,94,0.15)',
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+                  <ThumbsUp className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">{approvedIds.size} asset{approvedIds.size !== 1 ? 's' : ''} approved</p>
+                  <p className="text-[10px] text-green-400">Ready to schedule to smart time slots</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setApprovedIds(new Set())}
+                  className="btn-ghost text-xs px-3 py-1.5"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={handleScheduleApproved}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all active:scale-95"
+                  style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}
+                >
+                  <CalendarCheck className="w-4 h-4" />
+                  Schedule {approvedIds.size} Post{approvedIds.size !== 1 ? 's' : ''} →
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Right: Feed Preview Panel */}
           {showFeedPreview && (
             <div className="lg:w-80 xl:w-96 flex-shrink-0">
@@ -882,7 +1031,7 @@ export default function GalleryPage() {
             </div>
           )}
         </div>
-      </main>
+      </div>
 
       {showCreatePostModal && <CreatePostModal />}
 
