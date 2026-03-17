@@ -1,4 +1,4 @@
-import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 // ─── R2 Client (singleton per process) ───────────────────────────────────────
@@ -103,6 +103,18 @@ export async function listObjects(prefix: string, delimiter?: string): Promise<{
 export async function getPresignedUrl(key: string, expiresIn = 3600): Promise<string> {
   const client = getR2Client();
   const command = new GetObjectCommand({ Bucket: r2Bucket(), Key: key });
+  return getSignedUrl(client, command, { expiresIn });
+}
+
+// ─── Presigned upload URL (PUT, for private buckets) ─────────────────────────
+
+export async function getPresignedUploadUrl(
+  key: string,
+  contentType: string,
+  expiresIn = 900, // 15 minutes
+): Promise<string> {
+  const client = getR2Client();
+  const command = new PutObjectCommand({ Bucket: r2Bucket(), Key: key, ContentType: contentType });
   return getSignedUrl(client, command, { expiresIn });
 }
 

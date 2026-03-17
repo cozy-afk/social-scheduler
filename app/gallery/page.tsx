@@ -316,6 +316,11 @@ export default function GalleryPage() {
   const [thumbSize, setThumbSize] = useState(3);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0); // counts nested dragenter/dragleave events
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // Per-file upload progress: key = fileName, value = 0-100 | 'done' | 'error'
+  const [uploadQueue, setUploadQueue] = useState<Map<string, number | 'done' | 'error'>>(new Map());
 
   const [r2Loading, setR2Loading] = useState(false);
   const [r2Refreshing, setR2Refreshing] = useState(false);
@@ -405,20 +410,139 @@ export default function GalleryPage() {
 
   const handleLocalUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    files.forEach((file) => {
-      const url = URL.createObjectURL(file);
-      const isVideo = file.type.startsWith('video/');
-      addGalleryAsset({
-        id: `local-${Date.now()}-${file.name}`,
-        fileName: file.name,
-        fileUrl: url,
-        fileType: isVideo ? 'video' : 'image',
-        sizeBytes: file.size,
-        uploadedAt: new Date().toISOString(),
-        source: 'local',
+    if (selectedModel?.s3Folder) {
+      uploadFilesToR2(files);
+    } else {
+      files.forEach((file) => {
+        const url = URL.createObjectURL(file);
+        const isVideo = file.type.startsWith('video/');
+        addGalleryAsset({
+          id: `local-${Date.now()}-${file.name}`,
+          fileName: file.name,
+          fileUrl: url,
+          fileType: isVideo ? 'video' : 'image',
+          sizeBytes: file.size,
+          uploadedAt: new Date().toISOString(),
+          source: 'local',
+        });
       });
-    });
+    }
   };
+
+  /** Upload files directly to R2 via presigned PUT URLs, showing per-file progress. */
+  const uploadFilesToR2 = useCallback(async (files: File[]) => {
+    if (!selectedModel?.s3Folder) return;
+    const folder = selectedModel.s3Folder;
+
+    const queue = new Map<string, number | 'done' | 'error'>();
+    files.forEach((f) => queue.set(f.name, 0));
+    setUploadQueue(new Map(queue));
+
+    await Promise.all(files.map(async (file) => {
+      const key = file.name; // used only as queue identifier
+      try {
+        // 1. Get presigned PUT URL
+        const res = await fetch('/api/r2/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ modelFolder: folder, fileName: file.name, contentType: file.type }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({})) as { error?: string };
+          throw new Error(j.error ?? `HTTP ${res.status}`);
+        }
+        const { uploadUrl, key: r2Key, uuid } = await res.json() as { uploadUrl: string; key: string; uuid: string };
+
+        // 2. PUT directly to R2 with XHR so we get upload progress
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('PUT', uploadUrl);
+          xhr.setRequestHeader('Content-Type', file.type);
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              setUploadQueue((prev) => new Map(prev).set(key, Math.round((e.loaded / e.total) * 100)));
+            }
+          };
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else reject(new Error(`R2 PUT failed: ${xhr.status}`));
+          };
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.send(file);
+        });
+
+        // 3. Add to gallery immediately with a thumb-proxy URL
+        const thumbUrl = `/api/r2/thumb?key=${encodeURIComponent(r2Key)}`;
+        addGalleryAsset({
+          id: uuid,
+          fileName: file.name,
+          fileUrl: thumbUrl,
+          thumbnailUrl: file.type.startsWith('image/') ? thumbUrl : undefined,
+          fileType: file.type.startsWith('video/') ? 'video' : 'image',
+          sizeBytes: file.size,
+          uploadedAt: new Date().toISOString(),
+          source: 's3',
+          s3Key: r2Key,
+        });
+
+        setUploadQueue((prev) => new Map(prev).set(key, 'done'));
+      } catch {
+        setUploadQueue((prev) => new Map(prev).set(key, 'error'));
+      }
+    }));
+
+    // Invalidate the cache so the next gallery load fetches the new assets
+    const { invalidateCache } = await import('@/lib/gallery-cache');
+    invalidateCache(selectedModel.id);
+
+    // Clear the queue after a short delay so the user sees all ✓s
+    setTimeout(() => setUploadQueue(new Map()), 2500);
+  }, [selectedModel, addGalleryAsset]);
+
+  // ── Drag-and-drop handlers ────────────────────────────────────────────────
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (dragCounterRef.current === 1) setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) setIsDragOver(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); // required to allow drop
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragOver(false);
+
+    const files = Array.from(e.dataTransfer.files).filter(
+      (f) => f.type.startsWith('image/') || f.type.startsWith('video/'),
+    );
+    if (files.length === 0) return;
+
+    if (selectedModel?.s3Folder) {
+      uploadFilesToR2(files);
+    } else {
+      files.forEach((file) => {
+        const url = URL.createObjectURL(file);
+        addGalleryAsset({
+          id: `local-${Date.now()}-${file.name}`,
+          fileName: file.name,
+          fileUrl: url,
+          fileType: file.type.startsWith('video/') ? 'video' : 'image',
+          sizeBytes: file.size,
+          uploadedAt: new Date().toISOString(),
+          source: 'local',
+        });
+      });
+    }
+  }, [selectedModel, uploadFilesToR2, addGalleryAsset]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -639,7 +763,71 @@ export default function GalleryPage() {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen">
+      <div
+        className="min-h-screen relative"
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+      {/* ── Drag-over overlay ── */}
+      {isDragOver && (
+        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center"
+          style={{ background: 'rgba(124,58,237,0.15)', border: '3px dashed rgba(124,58,237,0.7)' }}>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="w-20 h-20 rounded-2xl flex items-center justify-center"
+              style={{ background: 'rgba(124,58,237,0.3)' }}>
+              <Upload className="w-10 h-10 text-violet-300" />
+            </div>
+            <p className="text-2xl font-bold text-violet-200">Drop to upload</p>
+            <p className="text-sm text-violet-300/70">
+              {selectedModel?.s3Folder ? `Uploading to [MODELS]/${selectedModel.s3Folder}/` : 'Adding to local gallery'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Upload progress panel ── */}
+      {uploadQueue.size > 0 && (
+        <div className="fixed bottom-6 right-6 z-50 w-72 rounded-2xl shadow-2xl overflow-hidden"
+          style={{ background: '#1A1A22', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
+            <span className="text-sm font-semibold text-white">Uploading {uploadQueue.size} file{uploadQueue.size !== 1 ? 's' : ''}</span>
+            {Array.from(uploadQueue.values()).every((v) => v === 'done' || v === 'error') && (
+              <button onClick={() => setUploadQueue(new Map())} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <div className="px-4 py-3 space-y-3 max-h-64 overflow-y-auto">
+            {Array.from(uploadQueue.entries()).map(([name, progress]) => (
+              <div key={name}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-slate-300 truncate max-w-[180px]">{name}</span>
+                  <span className="text-xs font-medium ml-2 flex-shrink-0">
+                    {progress === 'done' ? <Check className="w-3.5 h-3.5 text-green-400" /> :
+                     progress === 'error' ? <X className="w-3.5 h-3.5 text-red-400" /> :
+                     <span className="text-slate-400">{progress}%</span>}
+                  </span>
+                </div>
+                {typeof progress === 'number' && (
+                  <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                    <div className="h-full rounded-full bg-violet-500 transition-all duration-150"
+                      style={{ width: `${progress}%` }} />
+                  </div>
+                )}
+                {progress === 'done' && (
+                  <div className="h-1 rounded-full bg-green-500" />
+                )}
+                {progress === 'error' && (
+                  <div className="h-1 rounded-full bg-red-500" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <AutoPublisher />
       <div className="max-w-7xl mx-auto px-6 py-6">
         <div className={`flex gap-6 ${showFeedPreview ? 'lg:flex-row flex-col' : 'flex-col'}`}>
@@ -1135,12 +1323,12 @@ export default function GalleryPage() {
       })()}
 
       {workflowStep === 'scheduling' && <BatchScheduler />}
-      </div>
 
       {/* Video lightbox */}
       {previewVideo && (
         <VideoLightbox asset={previewVideo} onClose={() => setPreviewVideo(null)} />
       )}
+      </div>{/* end drag-and-drop wrapper */}
     </AuthGuard>
   );
 }
