@@ -18,6 +18,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.sub!;
 
         // Default values for new users (would be updated from database in production)
+        // Requires NEXTAUTH_SECRET and NEXTAUTH_URL environment variables
         session.user.role = 'agency';
         session.user.approvalStatus = 'pending';
       }
