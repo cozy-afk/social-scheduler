@@ -410,23 +410,11 @@ export default function GalleryPage() {
 
   const handleLocalUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (selectedModel?.s3Folder) {
-      uploadFilesToR2(files);
-    } else {
-      files.forEach((file) => {
-        const url = URL.createObjectURL(file);
-        const isVideo = file.type.startsWith('video/');
-        addGalleryAsset({
-          id: `local-${Date.now()}-${file.name}`,
-          fileName: file.name,
-          fileUrl: url,
-          fileType: isVideo ? 'video' : 'image',
-          sizeBytes: file.size,
-          uploadedAt: new Date().toISOString(),
-          source: 'local',
-        });
-      });
+    if (!selectedModel?.s3Folder) {
+      setR2Error('No R2 folder configured for this model. Set one in Settings → Model → General.');
+      return;
     }
+    uploadFilesToR2(files);
   };
 
   /** Upload files directly to R2 via presigned PUT URLs, showing per-file progress. */
@@ -526,23 +514,12 @@ export default function GalleryPage() {
     );
     if (files.length === 0) return;
 
-    if (selectedModel?.s3Folder) {
-      uploadFilesToR2(files);
-    } else {
-      files.forEach((file) => {
-        const url = URL.createObjectURL(file);
-        addGalleryAsset({
-          id: `local-${Date.now()}-${file.name}`,
-          fileName: file.name,
-          fileUrl: url,
-          fileType: file.type.startsWith('video/') ? 'video' : 'image',
-          sizeBytes: file.size,
-          uploadedAt: new Date().toISOString(),
-          source: 'local',
-        });
-      });
+    if (!selectedModel?.s3Folder) {
+      setR2Error('No R2 folder configured for this model. Set one in Settings → Model → General.');
+      return;
     }
-  }, [selectedModel, uploadFilesToR2, addGalleryAsset]);
+    uploadFilesToR2(files);
+  }, [selectedModel, uploadFilesToR2, setR2Error]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -781,7 +758,9 @@ export default function GalleryPage() {
             </div>
             <p className="text-2xl font-bold text-violet-200">Drop to upload</p>
             <p className="text-sm text-violet-300/70">
-              {selectedModel?.s3Folder ? `Uploading to [MODELS]/${selectedModel.s3Folder}/` : 'Adding to local gallery'}
+              {selectedModel?.s3Folder
+                ? `Uploading to [MODELS]/${selectedModel.s3Folder}/`
+                : 'No R2 folder configured — configure one in Settings first'}
             </p>
           </div>
         </div>
