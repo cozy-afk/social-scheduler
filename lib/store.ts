@@ -124,6 +124,31 @@ interface AppState {
   setPreloadedGalleryAssets: (assets: GalleryAsset[]) => void;
 }
 
+// ─── Selector: Get models filtered by current user role ──────────────────
+
+export function getVisibleModels(state: AppState): Model[] {
+  const { currentUser, models } = state;
+
+  if (!currentUser) return [];
+
+  // Admin: see all models
+  if (currentUser.role === 'admin') {
+    return models;
+  }
+
+  // VA: see only assigned models
+  if (currentUser.role === 'va') {
+    return models.filter((m) => currentUser.assignedModels.includes(m.id));
+  }
+
+  // Agency/Planner: see only their agency's models
+  if (currentUser.agencyId) {
+    return models.filter((m) => m.agencyId === currentUser.agencyId);
+  }
+
+  return [];
+}
+
 export const useStore = create<AppState>((set) => ({
   // Current user
   currentUser: null,

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useStore } from '@/lib/store';
-import { mockModels, mockAdmin, mockVAUsers, mockPosts, mockCaptions } from '@/lib/mockData';
+import { useStore, getVisibleModels } from '@/lib/store';
+import { mockModels, mockAdmin, mockVAUsers, mockPosts, mockCaptions, mockAgency1User } from '@/lib/mockData';
 import { Model, User, TimeSlot, Platform, PostType, PostingFrequencyConfig } from '@/types/models';
 import { createVAMagicLink, getVAMagicLinkURL } from '@/lib/magic-links';
 import {
@@ -471,11 +471,12 @@ function ModelCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function ModelsPage() {
   const {
-    models, setModels, setSelectedModelId, setCurrentUser, setPosts, setCaptions,
+    setModels, setSelectedModelId, setCurrentUser, setPosts, setCaptions,
     vaUsers, setVAUsers,
     addModel, updateModel, deleteModel,
     setMagicLinks,
   } = useStore();
+  const models = useStore(getVisibleModels); // Filtered by user role/agency
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingModel, setEditingModel] = useState<Model | null>(null);

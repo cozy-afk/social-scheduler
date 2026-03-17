@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useStore } from '@/lib/store';
+import { useStore, getVisibleModels } from '@/lib/store';
 import {
   LayoutGrid, Calendar, FileText, Users, BarChart2,
   TrendingUp, Settings, Zap, ChevronDown, CalendarCheck,
@@ -22,7 +22,8 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { models, selectedModelId, setSelectedModelId, currentUser } = useStore();
+  const { selectedModelId, setSelectedModelId, currentUser } = useStore();
+  const models = useStore(getVisibleModels);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const selectedModel = models.find((m) => m.id === selectedModelId);
 

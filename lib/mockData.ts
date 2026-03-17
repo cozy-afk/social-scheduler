@@ -119,6 +119,41 @@ export const mockModels: Model[] = [
     status: 'active',
     createdAt: new Date().toISOString(),
   },
+  // Agency-2 models (should not be visible to agency-1 users)
+  {
+    id: '6',
+    name: 'Nina',
+    profileImage: '🦋',
+    agencyId: 'agency-2',
+    fanvueAccountId: '',
+    s3Folder: 'NINA',
+    exifPreset: generateExifPreset(),
+    assignedVaIds: [],
+    postingFrequency: defaultFrequency,
+    postingSchedule: [
+      { id: '25', time: '11:00', platform: 'instagram', postType: 'instagram_post',  recurrence: 'daily' },
+      { id: '26', time: '11:00', platform: 'tiktok',    postType: 'tiktok_reel',      recurrence: 'daily' },
+    ],
+    status: 'active',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: '7',
+    name: 'Maya',
+    profileImage: '🌺',
+    agencyId: 'agency-2',
+    fanvueAccountId: '',
+    s3Folder: 'MAYA',
+    exifPreset: generateExifPreset(),
+    assignedVaIds: [],
+    postingFrequency: defaultFrequency,
+    postingSchedule: [
+      { id: '27', time: '14:00', platform: 'instagram', postType: 'instagram_reel',  recurrence: 'daily' },
+      { id: '28', time: '16:00', platform: 'threads',   postType: 'threads_post',    recurrence: 'daily' },
+    ],
+    status: 'active',
+    createdAt: new Date().toISOString(),
+  },
 ];
 
 export const mockAdmin: User = {
@@ -127,6 +162,26 @@ export const mockAdmin: User = {
   name: 'Admin User',
   role: 'admin',
   assignedModels: ['1', '2', '3'],
+};
+
+// Agency 1 users
+export const mockAgency1User: User = {
+  id: 'agency-1-user',
+  email: 'agency1@example.com',
+  name: 'Apex Admin',
+  role: 'agency',
+  agencyId: 'agency-1',
+  assignedModels: [],
+};
+
+// Agency 2 users
+export const mockAgency2User: User = {
+  id: 'agency-2-user',
+  email: 'agency2@example.com',
+  name: 'Stellar Admin',
+  role: 'agency',
+  agencyId: 'agency-2',
+  assignedModels: [],
 };
 
 export const mockVA: User = {

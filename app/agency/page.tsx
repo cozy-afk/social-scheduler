@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useStore } from '@/lib/store';
-import { mockModels, mockAdmin, mockVAUsers } from '@/lib/mockData';
+import { useStore, getVisibleModels } from '@/lib/store';
+import { mockModels, mockAdmin, mockVAUsers, mockAgency1User } from '@/lib/mockData';
 import { Model } from '@/types/models';
-import { Building2, Plus, Settings, Edit2, Users, X, Check } from 'lucide-react';
+import { Building2, Plus, Settings, Edit2, Users, X, Check, Shield } from 'lucide-react';
 import Link from 'next/link';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -263,15 +263,18 @@ function QuickActionCard({ label, description, href, icon }: QuickActionCardProp
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AgencyPage() {
-  const { models, setModels, setCurrentUser, setVAUsers, addModel } = useStore();
+  const { setModels, setCurrentUser, setVAUsers, addModel } = useStore();
+  const models = useStore(getVisibleModels); // Filtered by user role/agency
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingModel, setEditingModel] = useState<Model | null>(null);
+  // Demo toggle to switch between admin and agency user
+  const [isAdmin, setIsAdmin] = useState(true);
 
   useEffect(() => {
     setModels(mockModels);
-    setCurrentUser(mockAdmin);
+    setCurrentUser(isAdmin ? mockAdmin : mockAgency1User);
     setVAUsers(mockVAUsers);
-  }, [setModels, setCurrentUser, setVAUsers]);
+  }, [setModels, setCurrentUser, setVAUsers, isAdmin]);
 
   function handleAddModel(model: Model) {
     addModel(model);
@@ -319,16 +322,30 @@ export default function AgencyPage() {
     <div className="min-h-screen">
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Page heading */}
-        <div className="flex items-start gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <Building2 className="w-5 h-5 text-blue-400" />
+        <div className="flex items-start justify-between mb-8">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Building2 className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">Agency Dashboard</h1>
+              <p className="text-sm text-slate-400 mt-0.5">
+                Manage your models, posting schedules, and team.
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Agency Dashboard</h1>
-            <p className="text-sm text-slate-400 mt-0.5">
-              Manage your models, posting schedules, and team.
-            </p>
-          </div>
+          {/* Demo toggle to switch roles */}
+          <button
+            onClick={() => setIsAdmin(!isAdmin)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium border transition-all ${
+              isAdmin
+                ? 'bg-violet-600/20 border-violet-500/50 text-violet-300'
+                : 'bg-amber-600/20 border-amber-500/50 text-amber-300'
+            }`}
+          >
+            <Shield className="w-3.5 h-3.5" />
+            {isAdmin ? 'Viewing as: ADMIN (sees all)' : 'Viewing as: AGENCY (sees only theirs)'}
+          </button>
         </div>
 
         {/* Two-column layout */}

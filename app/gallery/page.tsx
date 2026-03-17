@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { useStore } from '@/lib/store';
+import { useStore, getVisibleModels } from '@/lib/store';
 import { mockModels, mockAdmin, mockGalleryAssets } from '@/lib/mockData';
 import CreatePostModal from '@/components/CreatePostModal';
 import StagingView from '@/components/StagingView';
@@ -469,7 +469,8 @@ function FeedPreviewPanel({
   selectedAssets: GalleryAsset[];
   onClose: () => void;
 }) {
-  const { models, selectedModelId } = useStore();
+  const { selectedModelId } = useStore();
+  const models = useStore(getVisibleModels); // Filtered by user role/agency
   const model = models.find((m) => m.id === selectedModelId) || models[0];
   const [platform, setPlatform] = useState<'instagram' | 'tiktok'>('instagram');
   const [fetchedPosts, setFetchedPosts] = useState<IGPost[]>([]);
@@ -567,12 +568,13 @@ function FeedPreviewPanel({
 
 export default function GalleryPage() {
   const {
-    setModels, setSelectedModelId, setCurrentUser,
+    selectedModelId, setModels, setSelectedModelId, setCurrentUser,
     galleryAssets, setGalleryAssets, addGalleryAsset,
     setShowCreatePostModal, setPreloadedGalleryAssets, showCreatePostModal,
     setStagedAssets, workflowStep, editingTarget, setEditingTarget,
     updateStagedVariant, setWorkflowStep, stagedAssets, posts,
   } = useStore();
+  const models = useStore(getVisibleModels); // Filtered by user role/agency
 
   // Build a set of fileUrls that have been used in completed posts
   const postedUrlSet = useMemo(() => {
