@@ -14,7 +14,12 @@ import {
   Check,
   X,
   ChevronDown,
+  CheckCircle2,
+  ExternalLink,
+  Clock,
+  BarChart2,
 } from 'lucide-react';
+import { format, isToday, parseISO } from 'date-fns';
 
 // ─── Local Types ──────────────────────────────────────────────────────────────
 
@@ -23,7 +28,7 @@ interface AgencyWithEmail extends Agency {
   email?: string;
 }
 
-type TabId = 'agencies' | 'ai' | 'status';
+type TabId = 'agencies' | 'ai' | 'status' | 'posted';
 
 type AiProvider = 'anthropic' | 'openai' | 'gemini' | 'grok';
 
@@ -642,12 +647,133 @@ function SystemStatusTab() {
   );
 }
 
+// ─── Posted Today Tab ─────────────────────────────────────────────────────────
+
+const PLATFORM_ICON: Record<string, string> = {
+  instagram: '📸', tiktok: '🎵', threads: '🧵', x: '𝕏', fanvue: '🎭',
+};
+const PLATFORM_LABEL: Record<string, string> = {
+  instagram: 'Instagram', tiktok: 'TikTok', threads: 'Threads', x: 'X', fanvue: 'Fanvue',
+};
+const POST_TYPE_LABEL: Record<string, string> = {
+  instagram_post: 'Post', instagram_reel: 'Reel', instagram_story: 'Story',
+  tiktok_reel: 'Reel', tiktok_slideshow: 'Slideshow', tiktok_story: 'Story',
+  x_post: 'Post', threads_post: 'Post', fanvue_post: 'Post',
+};
+
+function PostedTodayTab() {
+  const { posts, models } = useStore();
+
+  const todayCompleted = posts.filter(
+    (p) => p.status === 'completed' && p.completedAt && isToday(parseISO(p.completedAt))
+  ).sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime());
+
+  // Group by model
+  const byModel = models.map((m) => ({
+    model: m,
+    posts: todayCompleted.filter((p) => p.modelId === m.id),
+  })).filter((g) => g.posts.length > 0);
+
+  const missingUrl = todayCompleted.filter((p) => !p.postedUrl).length;
+
+  if (todayCompleted.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+        <Clock className="w-12 h-12 text-slate-700" />
+        <p className="text-white font-semibold">No posts completed today yet</p>
+        <p className="text-sm text-slate-500">Completed posts will appear here with verification links.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary bar */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl"
+          style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
+          <CheckCircle2 className="w-4 h-4 text-green-400" />
+          <span className="text-sm font-semibold text-green-300">{todayCompleted.length} posted today</span>
+        </div>
+        {missingUrl > 0 && (
+          <div className="flex items-center gap-2 px-4 py-2 rounded-xl"
+            style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+            <BarChart2 className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-semibold text-amber-300">{missingUrl} missing URL</span>
+          </div>
+        )}
+      </div>
+
+      {/* Per-model groups */}
+      {byModel.map(({ model, posts: modelPosts }) => (
+        <div key={model.id} className="card overflow-hidden">
+          {/* Model header */}
+          <div className="flex items-center gap-3 px-5 py-3"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)' }}>
+            {model.profileImage ? (
+              <img src={model.profileImage} alt="" className="w-7 h-7 rounded-full object-cover" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-violet-600/30 flex items-center justify-center text-xs font-bold text-violet-300">
+                {model.name.charAt(0)}
+              </div>
+            )}
+            <span className="text-sm font-semibold text-white">{model.name}</span>
+            <span className="ml-auto text-xs text-slate-500">{modelPosts.length} post{modelPosts.length !== 1 ? 's' : ''}</span>
+          </div>
+
+          {/* Post rows */}
+          <div className="divide-y divide-white/[0.04]">
+            {modelPosts.map((post) => (
+              <div key={post.id} className="flex items-center gap-3 px-5 py-3">
+                {/* Platform dot */}
+                <span className="text-base flex-shrink-0">{PLATFORM_ICON[post.platform]}</span>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">
+                    {PLATFORM_LABEL[post.platform]} {POST_TYPE_LABEL[post.postType]}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Scheduled {format(parseISO(post.scheduledTime), 'h:mm a')}
+                    {post.completedAt && (
+                      <> · Posted {format(parseISO(post.completedAt), 'h:mm a')}</>
+                    )}
+                    {post.completedBy && (
+                      <> · by {post.completedBy}</>
+                    )}
+                  </p>
+                </div>
+
+                {/* Verification link */}
+                {post.postedUrl ? (
+                  <a
+                    href={post.postedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-violet-400 hover:text-violet-300 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+                    style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}
+                  >
+                    Verify <ExternalLink className="w-3 h-3" />
+                  </a>
+                ) : (
+                  <span className="text-[11px] text-amber-500/70 flex-shrink-0">No URL</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'agencies', label: 'Agencies', icon: <Building2 className="w-4 h-4" /> },
   { id: 'ai', label: 'AI Config', icon: <Cpu className="w-4 h-4" /> },
   { id: 'status', label: 'System Status', icon: <Activity className="w-4 h-4" /> },
+  { id: 'posted', label: 'Posted Today', icon: <CheckCircle2 className="w-4 h-4" /> },
 ];
 
 export default function AdminPage() {
@@ -691,6 +817,7 @@ export default function AdminPage() {
           {activeTab === 'agencies' && <AgenciesTab />}
           {activeTab === 'ai' && <AiConfigTab />}
           {activeTab === 'status' && <SystemStatusTab />}
+          {activeTab === 'posted' && <PostedTodayTab />}
         </div>
       </main>
     </div>
