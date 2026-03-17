@@ -10,19 +10,16 @@ import {
 } from 'lucide-react';
 import { Post, Platform } from '@/types/models';
 import clsx from 'clsx';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, FanvueIcon } from './PlatformIcons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PLATFORM_COLORS: Record<Platform, { bg: string; text: string; dot: string }> = {
-  instagram: { bg: 'bg-pink-500/15',   text: 'text-pink-300',   dot: 'bg-pink-500'   },
-  tiktok:    { bg: 'bg-red-500/15',    text: 'text-red-300',    dot: 'bg-red-500'    },
-  threads:   { bg: 'bg-purple-500/15', text: 'text-purple-300', dot: 'bg-purple-500' },
-  x:         { bg: 'bg-slate-500/15',  text: 'text-slate-300',  dot: 'bg-slate-400'  },
-  fanvue:    { bg: 'bg-orange-500/15', text: 'text-orange-300', dot: 'bg-orange-500' },
-};
-
-const PLATFORM_ICON: Record<Platform, string> = {
-  instagram: '📸', tiktok: '🎵', threads: '🧵', x: '𝕏', fanvue: '🎭',
+  instagram: { bg: 'bg-[#E1306C]/15',   text: 'text-[#E1306C]',   dot: 'bg-[#E1306C]'   },
+  tiktok:    { bg: 'bg-[#FF0050]/15',    text: 'text-[#FF0050]',    dot: 'bg-[#FF0050]'    },
+  threads:   { bg: 'bg-white/15', text: 'text-white', dot: 'bg-white' },
+  x:         { bg: 'bg-white/15',  text: 'text-white',  dot: 'bg-white'  },
+  fanvue:    { bg: 'bg-[#FF2E55]/15', text: 'text-[#FF2E55]', dot: 'bg-[#FF2E55]' },
 };
 
 const PLATFORM_LABEL: Record<Platform, string> = {
@@ -217,7 +214,13 @@ function TaskCard({ post, onComplete }: TaskCardProps) {
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
       >
         <div className="flex items-center gap-2">
-          <span className="text-base">{PLATFORM_ICON[post.platform]}</span>
+          <span className="text-base">
+            {post.platform === 'instagram' && <InstagramIcon size={18} />}
+            {post.platform === 'tiktok' && <TikTokIcon size={18} />}
+            {post.platform === 'x' && <XIcon size={18} />}
+            {post.platform === 'threads' && <ThreadsIcon size={18} />}
+            {post.platform === 'fanvue' && <FanvueIcon size={18} />}
+          </span>
           <span className={clsx('text-xs font-bold', colors.text)}>
             {PLATFORM_LABEL[post.platform]} {POST_TYPE_LABEL[post.postType]}
           </span>
@@ -454,7 +457,13 @@ function CompletedCard({ post }: { post: Post }) {
     <div className="flex items-center gap-3 px-4 py-3 rounded-xl opacity-60"
       style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.05)' }}>
       <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-      <span className="text-sm">{PLATFORM_ICON[post.platform]}</span>
+      <span className="text-sm">
+        {post.platform === 'instagram' && <InstagramIcon size={16} />}
+        {post.platform === 'tiktok' && <TikTokIcon size={16} />}
+        {post.platform === 'x' && <XIcon size={16} />}
+        {post.platform === 'threads' && <ThreadsIcon size={16} />}
+        {post.platform === 'fanvue' && <FanvueIcon size={16} />}
+      </span>
       <div className="flex-1 min-w-0">
         <p className="text-xs font-semibold text-white truncate">
           {PLATFORM_LABEL[post.platform]} {POST_TYPE_LABEL[post.postType]}

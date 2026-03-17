@@ -18,6 +18,7 @@ import {
 } from 'date-fns';
 import { PLATFORM_THEMES } from '@/lib/constants/platform';
 import type { PostType } from '@/types/models';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, FanvueIcon } from '@/components/PlatformIcons';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -923,6 +924,7 @@ export default function SchedulePage() {
             {PREVIEW_PLATFORMS.map((p) => {
               const theme = PLATFORM_THEMES[p];
               const active = activePlatform === p;
+              const IconComponent = theme.icon;
               return (
                 <button key={p} onClick={() => setActivePlatform(p)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
@@ -931,7 +933,7 @@ export default function SchedulePage() {
                     border: `1px solid ${active ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.08)'}`,
                     color: active ? '#fff' : 'var(--text-muted)',
                   }}>
-                  <span>{theme.icon}</span>{theme.label}
+                  <IconComponent size={14} />{theme.label}
                 </button>
               );
             })}
@@ -1035,7 +1037,13 @@ export default function SchedulePage() {
                   <div className="space-y-1.5">
                     {selectedDayPosts.map((p) => (
                       <div key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                        <span className="text-sm">{PLATFORM_THEMES[p.platform].icon}</span>
+                        <span className="text-sm">
+                          {p.platform === 'instagram' && <InstagramIcon size={14} />}
+                          {p.platform === 'tiktok' && <TikTokIcon size={14} />}
+                          {p.platform === 'x' && <XIcon size={14} />}
+                          {p.platform === 'threads' && <ThreadsIcon size={14} />}
+                          {p.platform === 'fanvue' && <FanvueIcon size={14} />}
+                        </span>
                         <div className="flex-1 min-w-0">
                           <p className="text-[10px] font-semibold text-white truncate">{PLATFORM_THEMES[p.platform].label}</p>
                           <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
@@ -1057,7 +1065,13 @@ export default function SchedulePage() {
               {quotas.map(({ platform, entries }) => (
                 <div key={platform} className="mb-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm">{PLATFORM_THEMES[platform].icon}</span>
+                    <span className="text-sm">
+                      {platform === 'instagram' && <InstagramIcon size={14} />}
+                      {platform === 'tiktok' && <TikTokIcon size={14} />}
+                      {platform === 'x' && <XIcon size={14} />}
+                      {platform === 'threads' && <ThreadsIcon size={14} />}
+                      {platform === 'fanvue' && <FanvueIcon size={14} />}
+                    </span>
                     <p className="text-[11px] font-bold text-white">{PLATFORM_THEMES[platform].label}</p>
                   </div>
                   {entries.map((e) => <QuotaBar key={e.label} {...e} />)}

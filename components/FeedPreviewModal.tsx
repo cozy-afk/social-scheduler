@@ -18,6 +18,7 @@ import {
   Search,
 } from 'lucide-react';
 import clsx from 'clsx';
+import { InstagramIcon, TikTokIcon } from './PlatformIcons';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -493,14 +494,14 @@ function PlatformTabs({
         className={clsx(
           'flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all relative',
           active === 'instagram'
-            ? 'bg-white/5 border-pink-500/70 text-white'
+            ? 'bg-white/5 border-[#E1306C]/70 text-white'
             : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600',
         )}
       >
-        <span>📸</span>
+        <span><InstagramIcon size={18} /></span>
         Instagram Grid
         {active === 'instagram' && (
-          <span className="absolute bottom-0 left-4 right-4 h-[2px] bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600 rounded-full" />
+          <span className="absolute bottom-0 left-4 right-4 h-[2px] bg-gradient-to-r from-yellow-400 via-[#E1306C] to-[#8134AF] rounded-full" />
         )}
       </button>
       <button
@@ -508,14 +509,14 @@ function PlatformTabs({
         className={clsx(
           'flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all relative',
           active === 'tiktok'
-            ? 'bg-white/5 border-red-500/70 text-white'
+            ? 'bg-white/5 border-[#FF0050]/70 text-white'
             : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600',
         )}
       >
-        <span>🎵</span>
+        <span><TikTokIcon size={18} /></span>
         TikTok Feed
         {active === 'tiktok' && (
-          <span className="absolute bottom-0 left-4 right-4 h-[2px] bg-gradient-to-r from-red-500 to-black rounded-full" />
+          <span className="absolute bottom-0 left-4 right-4 h-[2px] bg-gradient-to-r from-[#FF0050] to-black rounded-full" />
         )}
       </button>
     </div>

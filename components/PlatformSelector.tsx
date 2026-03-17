@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { Check } from 'lucide-react';
 import { Platform } from '@/types/models';
 import { getPlatformTheme } from '@/lib/constants/platform';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, FanvueIcon } from './PlatformIcons';
 
 interface PlatformSelectorProps {
   selectedPlatforms: Platform[];
@@ -11,6 +12,14 @@ interface PlatformSelectorProps {
   showPresets?: boolean;
   onApplyPreset?: (platforms: Platform[]) => void;
 }
+
+const PLATFORM_ICONS: Record<Platform, React.ReactNode> = {
+  instagram: <InstagramIcon size={14} />,
+  tiktok: <TikTokIcon size={14} />,
+  x: <XIcon size={14} />,
+  threads: <ThreadsIcon size={14} />,
+  fanvue: <FanvueIcon size={14} />,
+};
 
 export const PlatformSelector = memo(function PlatformSelector({
   selectedPlatforms,
@@ -33,12 +42,11 @@ export const PlatformSelector = memo(function PlatformSelector({
             }`}
           >
             {isSelected && <Check className="w-3 h-3" />}
-            <span>{theme.icon}</span>
+            <span>{PLATFORM_ICONS[p]}</span>
             {theme.label}
           </button>
         );
       })}
-
       {showPresets && onApplyPreset && (
         <button
           type="button"

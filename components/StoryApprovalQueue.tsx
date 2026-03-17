@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store';
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { CheckCircle, XCircle, RefreshCw, Image as ImageIcon } from 'lucide-react';
+import { InstagramIcon, TikTokIcon } from './PlatformIcons';
 
 export default function StoryApprovalQueue() {
   const { models, selectedModelId, posts, updatePost } = useStore();
@@ -70,7 +71,7 @@ export default function StoryApprovalQueue() {
       case 'food': return '🍕';
       case 'selfie': return '🤳';
       case 'gym': return '💪';
-      default: return '📸';
+      default: return <InstagramIcon size={18} />;
     }
   };
 
@@ -139,8 +140,16 @@ export default function StoryApprovalQueue() {
                   {/* Story Info */}
                   <div className="p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold text-white">
-                        {story.postType === 'instagram_story' ? '📸 Instagram' : '🎵 TikTok'} Story
+                      <span className="text-sm font-semibold text-white flex items-center gap-1.5">
+                        {story.postType === 'instagram_story' ? (
+                          <>
+                            <InstagramIcon size={16} /> Instagram
+                          </>
+                        ) : (
+                          <>
+                            <TikTokIcon size={16} /> TikTok
+                          </>
+                        )} Story
                       </span>
                       <span className="text-xs text-slate-400 capitalize">
                         {story.storyCategory?.replace('-', ' ')}

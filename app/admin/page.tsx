@@ -20,6 +20,7 @@ import {
   BarChart2,
 } from 'lucide-react';
 import { format, isToday, parseISO } from 'date-fns';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, FanvueIcon } from '@/components/PlatformIcons';
 
 // ─── Local Types ──────────────────────────────────────────────────────────────
 
@@ -649,9 +650,6 @@ function SystemStatusTab() {
 
 // ─── Posted Today Tab ─────────────────────────────────────────────────────────
 
-const PLATFORM_ICON: Record<string, string> = {
-  instagram: '📸', tiktok: '🎵', threads: '🧵', x: '𝕏', fanvue: '🎭',
-};
 const PLATFORM_LABEL: Record<string, string> = {
   instagram: 'Instagram', tiktok: 'TikTok', threads: 'Threads', x: 'X', fanvue: 'Fanvue',
 };
@@ -726,7 +724,13 @@ function PostedTodayTab() {
             {modelPosts.map((post) => (
               <div key={post.id} className="flex items-center gap-3 px-5 py-3">
                 {/* Platform dot */}
-                <span className="text-base flex-shrink-0">{PLATFORM_ICON[post.platform]}</span>
+                <span className="text-base flex-shrink-0">
+                  {post.platform === 'instagram' && <InstagramIcon size={18} />}
+                  {post.platform === 'tiktok' && <TikTokIcon size={18} />}
+                  {post.platform === 'x' && <XIcon size={18} />}
+                  {post.platform === 'threads' && <ThreadsIcon size={18} />}
+                  {post.platform === 'fanvue' && <FanvueIcon size={18} />}
+                </span>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">

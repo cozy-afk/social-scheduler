@@ -16,6 +16,7 @@ import {
   Send, Play, Music2, Layers,
   Grid3X3, List, Rows3, CheckCheck, ThumbsUp, CalendarCheck,
 } from 'lucide-react';
+import { InstagramIcon, TikTokIcon } from '@/components/PlatformIcons';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -516,11 +517,11 @@ function FeedPreviewPanel({
           <button
             key={p}
             onClick={() => setPlatform(p)}
-            className={`flex-1 py-1.5 rounded-md text-xs font-medium capitalize transition-all ${
+            className={`flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-medium capitalize transition-all ${
               platform === p ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            {p === 'instagram' ? '📸 Instagram' : '🎵 TikTok'}
+            {p === 'instagram' ? <><InstagramIcon size={14} /> Instagram</> : <><TikTokIcon size={14} /> TikTok</>}
           </button>
         ))}
       </div>

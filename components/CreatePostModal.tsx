@@ -13,28 +13,29 @@ import { PLATFORM_THEMES } from '@/lib/constants/platform';
 import {
   FontKey, StrokeKey, EDITOR_FONTS, EDITOR_STROKES, EDITOR_COLORS, getTextShadow,
 } from '@/lib/constants/editor';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, FanvueIcon } from './PlatformIcons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const FORMAT_CONFIG: Record<PostFormat, {
   label: string;
-  emoji: string;
   description: string;
   platforms: Platform[];
   postTypeMap: Partial<Record<Platform, PostType>>;
 }> = {
-  carousel: { label: 'Carousel', emoji: '🖼️', description: 'IG Carousel + TikTok Slideshow', platforms: ['instagram', 'tiktok'], postTypeMap: { instagram: 'instagram_post', tiktok: 'tiktok_slideshow' } },
-  reels:    { label: 'Reel',     emoji: '🎬', description: 'Instagram Reel + TikTok Reel',   platforms: ['instagram', 'tiktok'], postTypeMap: { instagram: 'instagram_reel',  tiktok: 'tiktok_reel'       } },
-  threads:  { label: 'Threads',  emoji: '🧵', description: 'Threads post',                   platforms: ['threads'],             postTypeMap: { threads: 'threads_post'                                   } },
-  story:    { label: 'Story',    emoji: '⭕', description: 'Instagram Story',                 platforms: ['instagram'],           postTypeMap: { instagram: 'instagram_story'                              } },
-  x:        { label: 'X Post',   emoji: '𝕏', description: 'X (Twitter) post',               platforms: ['x'],                   postTypeMap: { x: 'x_post'                                              } },
+  carousel: { label: 'Carousel', description: 'IG Carousel + TikTok Slideshow', platforms: ['instagram', 'tiktok'], postTypeMap: { instagram: 'instagram_post', tiktok: 'tiktok_slideshow' } },
+  reels:    { label: 'Reel',     description: 'Instagram Reel + TikTok Reel',   platforms: ['instagram', 'tiktok'], postTypeMap: { instagram: 'instagram_reel',  tiktok: 'tiktok_reel'       } },
+  threads:  { label: 'Threads',  description: 'Threads post',                   platforms: ['threads'],             postTypeMap: { threads: 'threads_post'                                   } },
+  story:    { label: 'Story',    description: 'Instagram Story',                 platforms: ['instagram'],           postTypeMap: { instagram: 'instagram_story'                              } },
+  x:        { label: 'X Post',   description: 'X (Twitter) post',               platforms: ['x'],                   postTypeMap: { x: 'x_post'                                              } },
 };
 
 const getPlatformStyle = (platform: Platform) => {
   const theme = PLATFORM_THEMES[platform];
+  const IconComponent = theme.icon;
   return {
     label: theme.label,
-    icon: theme.icon,
+    icon: <IconComponent size={14} />,
     section: theme.bgDim.replace('bg-', 'border ').replace('/15', '/25') + ' ' + theme.bgDim,
     header: theme.bgDim + ' border-b ' + theme.border.replace('bg-', 'border-') + '/25 ' + theme.text,
     badge: theme.bgDim + ' border ' + theme.border.replace('bg-', 'border-') + '/30 ' + theme.text,
@@ -787,22 +788,29 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
           <div>
             <label className="text-sm font-medium text-slate-300 mb-3 block">Post Format</label>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-              {Object.entries(FORMAT_CONFIG).map(([key, config]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setFormat(key as PostFormat)}
-                  className={`p-3 rounded-xl border text-center transition-all ${
-                    format === key
-                      ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
-                  }`}
-                >
-                  <div className="text-2xl mb-1">{config.emoji}</div>
-                  <div className="text-xs font-medium">{config.label}</div>
-                  <div className="text-[10px] opacity-75 mt-0.5">{config.description}</div>
-                </button>
-              ))}
+              {Object.entries(FORMAT_CONFIG).map(([key, config]) => {
+                const formatIcon = key === 'carousel' ? <InstagramIcon size={32} /> :
+                                   key === 'reels' ? <TikTokIcon size={32} /> :
+                                   key === 'threads' ? <ThreadsIcon size={32} /> :
+                                   key === 'story' ? <InstagramIcon size={32} /> :
+                                   <XIcon size={32} />;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setFormat(key as PostFormat)}
+                    className={`p-3 rounded-xl border text-center transition-all ${
+                      format === key
+                        ? 'bg-blue-600 border-blue-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="text-2xl mb-1">{formatIcon}</div>
+                    <div className="text-xs font-medium">{config.label}</div>
+                    <div className="text-[10px] opacity-75 mt-0.5">{config.description}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

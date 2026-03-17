@@ -17,52 +17,53 @@ import {
 } from 'lucide-react';
 import PostReferenceCard from '@/components/PostReferenceCard';
 import PostReferenceImporter from '@/components/PostReferenceImporter';
+import { InstagramIcon, TikTokIcon, XIcon as XPlatformIcon, ThreadsIcon } from '@/components/PlatformIcons';
 
 // ─── Category config ──────────────────────────────────────────────────────────
 
 const CATEGORY_CONFIG: Record<
   CaptionCategory,
-  { label: string; icon: string; description: string; color: string }
+  { label: string; icon: React.ReactNode; description: string; color: string }
 > = {
   ig_reels: {
     label: 'IG Reels',
-    icon: '🎬',
+    icon: <InstagramIcon size={20} />,
     description: 'Short, engaging captions for Instagram Reels',
     color: 'border-pink-500/40 bg-pink-500/10',
   },
   ig_post: {
     label: 'IG Post',
-    icon: '📸',
+    icon: <InstagramIcon size={20} />,
     description: 'Carousel and single image post descriptions',
     color: 'border-pink-400/40 bg-pink-400/10',
   },
   tiktok_slideshow: {
     label: 'TikTok Slideshow',
-    icon: '🖼️',
+    icon: <TikTokIcon size={20} />,
     description: 'Text that goes directly ON each slide image',
     color: 'border-red-500/40 bg-red-500/10',
   },
   tiktok_reel: {
     label: 'TikTok Reels',
-    icon: '🎵',
+    icon: <TikTokIcon size={20} />,
     description: 'Short captions for TikTok video posts',
     color: 'border-red-400/40 bg-red-400/10',
   },
   threads_post: {
     label: 'Threads',
-    icon: '🧵',
+    icon: <ThreadsIcon size={20} />,
     description: 'Conversational post text for Threads',
-    color: 'border-purple-500/40 bg-purple-500/10',
+    color: 'border-white/40 bg-white/10',
   },
   x_post: {
     label: 'X (Twitter)',
-    icon: '𝕏',
+    icon: <XPlatformIcon size={20} />,
     description: 'Promotional tweets and post text',
-    color: 'border-slate-500/40 bg-slate-500/10',
+    color: 'border-white/40 bg-white/10',
   },
   general: {
     label: 'General',
-    icon: '✨',
+    icon: <Sparkles size={20} />,
     description: 'Multi-platform references',
     color: 'border-blue-500/40 bg-blue-500/10',
   },

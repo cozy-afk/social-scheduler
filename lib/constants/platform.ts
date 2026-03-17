@@ -1,4 +1,5 @@
 import { Platform, PostType, CropRatio } from '@/types/models';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, FanvueIcon } from '@/components/PlatformIcons';
 
 // ─── Platform Theme Configuration ──────────────────────────────────────────────
 
@@ -11,7 +12,7 @@ export interface PlatformTheme {
   text: string;
 
   // UI elements
-  icon: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
   label: string;
   shortLabel: string;
 
@@ -21,59 +22,59 @@ export interface PlatformTheme {
 
 export const PLATFORM_THEMES: Record<Platform, PlatformTheme> = {
   instagram: {
-    bg: 'bg-pink-500',
-    bgDim: 'bg-pink-500/15',
-    border: 'border-pink-500',
-    ring: 'ring-pink-500/60',
-    text: 'text-pink-300',
-    icon: '📸',
+    bg: 'bg-gradient-to-br from-orange-500 to-purple-600',
+    bgDim: 'bg-gradient-to-br from-orange-500/15 to-purple-600/15',
+    border: 'border-[#E1306C]',
+    ring: 'ring-[#E1306C]/60',
+    text: 'text-[#E1306C]',
+    icon: InstagramIcon,
     label: 'Instagram',
     shortLabel: 'IG',
-    active: 'border-pink-500/60 bg-pink-500/15 text-pink-300',
+    active: 'border-[#E1306C]/60 bg-[#E1306C]/15 text-[#E1306C]',
   },
   tiktok: {
-    bg: 'bg-red-500',
-    bgDim: 'bg-red-500/15',
-    border: 'border-red-500',
-    ring: 'ring-red-500/60',
-    text: 'text-red-300',
-    icon: '🎵',
+    bg: 'bg-gradient-to-br from-[#FF0050] to-[#00F2EA]',
+    bgDim: 'bg-gradient-to-br from-[#FF0050]/15 to-[#00F2EA]/15',
+    border: 'border-[#FF0050]',
+    ring: 'ring-[#FF0050]/60',
+    text: 'text-[#FF0050]',
+    icon: TikTokIcon,
     label: 'TikTok',
     shortLabel: 'TT',
-    active: 'border-red-500/60 bg-red-500/15 text-red-300',
+    active: 'border-[#FF0050]/60 bg-[#FF0050]/15 text-[#FF0050]',
   },
   x: {
-    bg: 'bg-slate-400',
-    bgDim: 'bg-slate-500/15',
-    border: 'border-slate-400',
-    ring: 'ring-slate-400/60',
-    text: 'text-slate-200',
-    icon: '𝕏',
+    bg: 'bg-black',
+    bgDim: 'bg-black/15',
+    border: 'border-white/30',
+    ring: 'ring-white/60',
+    text: 'text-white',
+    icon: XIcon,
     label: 'X',
     shortLabel: 'X',
-    active: 'border-slate-400/60 bg-slate-500/15 text-slate-200',
+    active: 'border-white/60 bg-white/15 text-white',
   },
   threads: {
-    bg: 'bg-purple-500',
-    bgDim: 'bg-purple-500/15',
-    border: 'border-purple-500',
-    ring: 'ring-purple-500/60',
-    text: 'text-purple-300',
-    icon: '🧵',
+    bg: 'bg-black',
+    bgDim: 'bg-black/15',
+    border: 'border-white/30',
+    ring: 'ring-white/60',
+    text: 'text-white',
+    icon: ThreadsIcon,
     label: 'Threads',
     shortLabel: 'Threads',
-    active: 'border-purple-500/60 bg-purple-500/15 text-purple-300',
+    active: 'border-white/60 bg-white/15 text-white',
   },
   fanvue: {
-    bg: 'bg-orange-500',
-    bgDim: 'bg-orange-500/15',
-    border: 'border-orange-500',
-    ring: 'ring-orange-500/60',
-    text: 'text-orange-300',
-    icon: '🎭',
+    bg: 'bg-gradient-to-br from-[#FF2E55] to-[#FF4D6A]',
+    bgDim: 'bg-gradient-to-br from-[#FF2E55]/15 to-[#FF4D6A]/15',
+    border: 'border-[#FF2E55]',
+    ring: 'ring-[#FF2E55]/60',
+    text: 'text-[#FF2E55]',
+    icon: FanvueIcon,
     label: 'Fanvue',
     shortLabel: 'Fanvue',
-    active: 'border-orange-500/60 bg-orange-500/15 text-orange-300',
+    active: 'border-[#FF2E55]/60 bg-[#FF2E55]/15 text-[#FF2E55]',
   },
 };
 
@@ -146,15 +147,15 @@ export const POST_TYPE_CONFIGS: Record<PostType, PostTypeConfig> = {
 // ─── Post Type Color Configuration ───────────────────────────────────────────────
 
 export const POST_TYPE_COLORS: Record<PostType, string> = {
-  instagram_post: 'bg-pink-500/30 border-pink-500/50',
-  instagram_reel: 'bg-rose-500/30 border-rose-500/50',
-  instagram_story: 'bg-orange-500/30 border-orange-500/50',
-  tiktok_reel: 'bg-red-500/30 border-red-500/50',
-  tiktok_slideshow: 'bg-red-400/30 border-red-400/50',
-  tiktok_story: 'bg-orange-400/30 border-orange-400/50',
-  x_post: 'bg-slate-500/30 border-slate-500/50',
-  threads_post: 'bg-purple-500/30 border-purple-500/50',
-  fanvue_post: 'bg-orange-500/30 border-orange-500/50',
+  instagram_post: 'bg-[#E1306C]/30 border-[#E1306C]/50',
+  instagram_reel: 'bg-gradient-to-br from-[#F58529]/30 to-[#405DE6]/30 border-[#E1306C]/50',
+  instagram_story: 'bg-[#F58529]/30 border-[#F58529]/50',
+  tiktok_reel: 'bg-gradient-to-br from-[#FF0050]/30 to-[#00F2EA]/30 border-[#FF0050]/50',
+  tiktok_slideshow: 'bg-[#00F2EA]/30 border-[#00F2EA]/50',
+  tiktok_story: 'bg-[#FF0050]/30 border-[#FF0050]/50',
+  x_post: 'bg-white/10 border-white/30',
+  threads_post: 'bg-white/10 border-white/30',
+  fanvue_post: 'bg-[#FF2E55]/30 border-[#FF2E55]/50',
 };
 
 // ─── Crop Ratio to Platforms Mapping ──────────────────────────────────────────────
@@ -223,6 +224,11 @@ export function getPostTypeForPlatformAndRatio(
   return PLATFORM_RATIO_TO_POST_TYPE[platform][ratio];
 }
 
-export function getPlatformColor(platform: Platform, variant: keyof PlatformTheme): string {
+export function getPlatformColor(platform: Platform, variant: Exclude<keyof PlatformTheme, 'icon'>): string {
   return PLATFORM_THEMES[platform][variant];
+}
+
+// Helper to get the platform icon component
+export function getPlatformIcon(platform: Platform): React.ComponentType<{ size?: number; className?: string }> {
+  return PLATFORM_THEMES[platform].icon;
 }

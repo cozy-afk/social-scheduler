@@ -3,6 +3,7 @@
 import { Post } from '@/types/models';
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Music } from 'lucide-react';
 import { PLATFORM_THEMES, POST_TYPE_CONFIGS, getPostTypeColor } from '@/lib/constants/platform';
+import { InstagramIcon, TikTokIcon } from './PlatformIcons';
 
 interface PostPreviewProps {
   post: Post;
@@ -53,7 +54,7 @@ function InstagramPreview({ post, modelName, modelProfileImage }: PostPreviewPro
           {/* Story Content */}
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-white text-center">
-              <div className="text-4xl mb-2">📸</div>
+              <div className="text-4xl mb-2"><InstagramIcon size={36} /></div>
               <p className="text-sm px-4">{post.description}</p>
             </div>
           </div>
@@ -138,7 +139,7 @@ function TikTokPreview({ post, modelName, modelProfileImage }: PostPreviewProps)
         {/* Video Content */}
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-white text-center">
-            <div className="text-6xl mb-2">🎵</div>
+            <div className="text-6xl mb-2"><TikTokIcon size={56} /></div>
             <p className="text-sm">TikTok {isStory ? 'Story' : 'Reel'}</p>
           </div>
         </div>
