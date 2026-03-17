@@ -1,4 +1,5 @@
 export type UserRole = 'admin' | 'agency' | 'planner' | 'va';
+export type UserApprovalStatus = 'pending' | 'approved' | 'denied';
 
 // ─── Agency ─────────────────────────────────────────────────────────
 
@@ -105,6 +106,7 @@ export interface User {
   agencyId?: string;        // For agency/planner users - links to their agency
   assignedModels: string[]; // For VAs - which models they can access
   discordId?: string;       // Discord user ID for auth
+  approvalStatus?: UserApprovalStatus; // For new agency users pending approval
   createdAt?: string;
   updatedAt?: string;
 }

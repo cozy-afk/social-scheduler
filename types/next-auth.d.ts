@@ -11,6 +11,7 @@ declare module 'next-auth' {
       role: UserRole;
       agencyId?: string;
       discordId?: string;
+      approvalStatus?: 'pending' | 'approved' | 'denied';
     };
   }
 }

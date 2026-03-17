@@ -198,6 +198,74 @@ export const mockVAUsers: User[] = [
   { id: 'va-3', email: 'va3@example.com', name: 'Casey Morgan', role: 'va', assignedModels: [] },
 ];
 
+// ─── Users with Discord OAuth Data ─────────────────────────────────────
+
+export const mockUsersWithDiscord: User[] = [
+  {
+    id: 'discord-admin-1',
+    email: 'admin@socialscheduler.com',
+    name: 'System Admin',
+    role: 'admin',
+    assignedModels: [],
+    discordId: '123456789012345678',
+    approvalStatus: 'approved',
+    createdAt: '2024-01-01T00:00:00Z',
+  },
+  {
+    id: 'discord-agency-1',
+    email: 'apex@agency.com',
+    name: 'Apex Admin',
+    role: 'agency',
+    agencyId: 'agency-1',
+    assignedModels: [],
+    discordId: '234567890123456789',
+    approvalStatus: 'approved',
+    createdAt: '2024-01-15T00:00:00Z',
+  },
+  {
+    id: 'discord-agency-2',
+    email: 'stellar@agency.com',
+    name: 'Stellar Admin',
+    role: 'agency',
+    agencyId: 'agency-2',
+    assignedModels: [],
+    discordId: '345678901234567890',
+    approvalStatus: 'approved',
+    createdAt: '2024-01-15T00:00:00Z',
+  },
+  {
+    id: 'discord-pending-1',
+    email: 'newuser@example.com',
+    name: 'Pending User',
+    role: 'agency',
+    assignedModels: [],
+    discordId: '456789012345678901',
+    approvalStatus: 'pending',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'discord-denied-1',
+    email: 'denied@example.com',
+    name: 'Denied User',
+    role: 'agency',
+    assignedModels: [],
+    discordId: '567890123456789012',
+    approvalStatus: 'denied',
+    createdAt: '2024-02-01T00:00:00Z',
+  },
+  {
+    id: 'discord-planner-1',
+    email: 'planner@apex.com',
+    name: 'Content Planner',
+    role: 'planner',
+    agencyId: 'agency-1',
+    assignedModels: ['1', '2'],
+    discordId: '678901234567890123',
+    approvalStatus: 'approved',
+    createdAt: '2024-01-20T00:00:00Z',
+  },
+];
+
 // Generate posts for today + next 6 days for Emma Rose
 const today = new Date();
 const generatePostsForDay = (date: Date, modelId: string, partial = false): Post[] => {

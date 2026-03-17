@@ -34,6 +34,7 @@ interface AppState {
   addUser: (user: User) => void;
   updateUser: (id: string, updates: Partial<User>) => void;
   deleteUser: (id: string) => void;
+  syncUserFromSession: (session: { user: { id: string; name: string; email: string; image?: string } }) => User | null;
 
   // Models
   models: Model[];
@@ -175,6 +176,47 @@ export const useStore = create<AppState>((set) => ({
     })),
   deleteUser: (id) =>
     set((state) => ({ users: state.users.filter((u) => u.id !== id) })),
+  syncUserFromSession: (session) => {
+    const store = useStore.getState();
+    // Check if user already exists by Discord ID or email
+    const existingUser = store.users.find(
+      (u) => u.discordId === session.user.id || u.email === session.user.email
+    );
+
+    if (existingUser) {
+      // Update last accessed time and sync name if changed
+      const updatedUser: User = {
+        ...existingUser,
+        name: session.user.name,
+        email: session.user.email,
+        updatedAt: new Date().toISOString(),
+      };
+      set((state) => ({
+        users: state.users.map((u) => (u.id === existingUser.id ? updatedUser : u)),
+        currentUser: updatedUser,
+      }));
+      return updatedUser;
+    }
+
+    // Create new user from Discord session (default to 'agency' role)
+    const newUser: User = {
+      id: `discord-${session.user.id}`,
+      email: session.user.email,
+      name: session.user.name,
+      role: 'agency', // Default role, requires admin approval
+      assignedModels: [],
+      discordId: session.user.id,
+      approvalStatus: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    set((state) => ({
+      users: [...state.users, newUser],
+      currentUser: newUser,
+    }));
+    return newUser;
+  },
 
   // Models
   models: [],
