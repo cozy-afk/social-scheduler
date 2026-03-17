@@ -17,10 +17,18 @@ export const authOptions: NextAuthOptions = {
         // Add user ID from token subject
         session.user.id = token.sub!;
 
-        // Default values for new users (would be updated from database in production)
-        // Requires NEXTAUTH_SECRET and NEXTAUTH_URL environment variables
-        session.user.role = 'agency';
-        session.user.approvalStatus = 'pending';
+        // Admin users - automatically approved
+        const adminEmails = ['cozygirlamy@gmail.com'];
+
+        if (adminEmails.includes(session.user.email || '')) {
+          session.user.role = 'admin';
+          session.user.approvalStatus = 'approved';
+        } else {
+          // Default values for new users (would be updated from database in production)
+          // Requires NEXTAUTH_SECRET and NEXTAUTH_URL environment variables
+          session.user.role = 'agency';
+          session.user.approvalStatus = 'pending';
+        }
       }
       return session;
     },
