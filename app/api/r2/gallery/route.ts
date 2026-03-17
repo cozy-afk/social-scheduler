@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { listObjects, getPresignedUrl, getPublicUrl } from '@/lib/r2';
 import { GalleryAsset } from '@/types/models';
 import { createHash } from 'crypto';
@@ -25,6 +27,11 @@ function fileTypeOf(key: string): 'image' | 'video' | null {
  * Pass presign=false to get raw keys (for public buckets with R2_PUBLIC_BASE_URL set).
  */
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const modelFolder = searchParams.get('modelFolder');
   const presign = searchParams.get('presign') !== 'false';
@@ -104,7 +111,8 @@ export async function GET(req: NextRequest) {
       }
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    // Don't leak internal bucket/endpoint details to the client
+    console.error('[r2/gallery]', err);
+    return NextResponse.json({ ok: false, error: 'Failed to load gallery' }, { status: 500 });
   }
 }
