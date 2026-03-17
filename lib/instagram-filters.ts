@@ -1,7 +1,4 @@
-export interface InstagramFilter {
-  name: string;
-  css: string;
-}
+import { InstagramFilter } from '@/types/utils';
 
 export const INSTAGRAM_FILTERS: InstagramFilter[] = [
   { name: 'Normal',    css: '' },

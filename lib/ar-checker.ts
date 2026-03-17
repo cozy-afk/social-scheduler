@@ -1,50 +1,77 @@
-export interface ARViolation {
-  fileName: string;
-  width: number;
-  height: number;
-  actualRatio: number;
-  displayRatio: string;
-}
+import { ARViolation, ARCheckResult } from '@/types/utils';
 
-export interface ARCheckResult {
-  valid: boolean;
-  violations: ARViolation[];
-}
+/** Supported aspect ratios for Instagram posts */
+const SUPPORTED_RATIOS: { ratio: number; label: string }[] = [
+  { ratio: 1.0, label: '1:1' },
+  { ratio: 0.8, label: '4:5' },
+];
 
-const RATIO_1_1 = 1.0;
-const RATIO_4_5 = 0.8; // 4÷5
+/** Tolerance for ratio comparison */
 const TOLERANCE = 0.03;
 
+/** Common aspect ratios for display formatting */
+const COMMON_RATIOS: { ratio: number; label: string }[] = [
+  { ratio: 1.0, label: '1:1' },
+  { ratio: 0.8, label: '4:5' },
+  { ratio: 0.5625, label: '9:16' },
+  { ratio: 1.7778, label: '16:9' },
+  { ratio: 1.3333, label: '4:3' },
+];
+
+/**
+ * Get image dimensions from a File object
+ */
 function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
+
     img.onload = () => {
       URL.revokeObjectURL(url);
       resolve({ width: img.naturalWidth, height: img.naturalHeight });
     };
+
     img.onerror = () => {
       URL.revokeObjectURL(url);
       reject(new Error('Could not load image'));
     };
+
     img.src = url;
   });
 }
 
+/**
+ * Format a ratio value as a human-readable string
+ */
 function formatRatio(ratio: number): string {
-  // Common ratios
-  if (Math.abs(ratio - 1.0) < 0.02) return '1:1';
-  if (Math.abs(ratio - 0.8) < 0.02) return '4:5';
-  if (Math.abs(ratio - 0.5625) < 0.02) return '9:16';
-  if (Math.abs(ratio - 1.7778) < 0.02) return '16:9';
-  if (Math.abs(ratio - 1.3333) < 0.02) return '4:3';
-  if (ratio > 1) return `${ratio.toFixed(2)}:1`;
-  return `1:${(1 / ratio).toFixed(2)}`;
+  // Check against common ratios
+  for (const { ratio: targetRatio, label } of COMMON_RATIOS) {
+    if (Math.abs(ratio - targetRatio) < 0.02) {
+      return label;
+    }
+  }
+
+  // Format as decimal ratio
+  return ratio > 1 ? `${ratio.toFixed(2)}:1` : `1:${(1 / ratio).toFixed(2)}`;
 }
 
+/**
+ * Check if a ratio matches any supported ratio within tolerance
+ */
+function isSupportedRatio(ratio: number): boolean {
+  return SUPPORTED_RATIOS.some(({ ratio: targetRatio }) =>
+    Math.abs(ratio - targetRatio) <= TOLERANCE
+  );
+}
+
+/**
+ * Check aspect ratios of image files and return violations
+ */
 export async function checkImageAspectRatios(files: File[]): Promise<ARCheckResult> {
   const imageFiles = files.filter((f) => f.type.startsWith('image/'));
-  if (imageFiles.length === 0) return { valid: true, violations: [] };
+  if (imageFiles.length === 0) {
+    return { valid: true, violations: [] };
+  }
 
   const violations: ARViolation[] = [];
 
@@ -52,10 +79,8 @@ export async function checkImageAspectRatios(files: File[]): Promise<ARCheckResu
     try {
       const { width, height } = await getImageDimensions(file);
       const ratio = width / height;
-      const is1x1 = Math.abs(ratio - RATIO_1_1) <= TOLERANCE;
-      const is4x5 = Math.abs(ratio - RATIO_4_5) <= TOLERANCE;
 
-      if (!is1x1 && !is4x5) {
+      if (!isSupportedRatio(ratio)) {
         violations.push({
           fileName: file.name,
           width,

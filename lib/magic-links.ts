@@ -1,5 +1,7 @@
-import { VAMagicLink } from '@/types/models';
-import { User } from '@/types/models';
+import { VAMagicLink, User } from '@/types/models';
+
+/** Magic link expiration duration in milliseconds (1 year) */
+const MAGIC_LINK_EXPIRATION_MS = 365 * 24 * 60 * 60 * 1000;
 
 /**
  * Creates a self-contained base64 token that encodes VA context.
@@ -7,7 +9,7 @@ import { User } from '@/types/models';
  */
 export function createVAMagicLink(va: User): VAMagicLink {
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year
+  const expiresAt = new Date(now.getTime() + MAGIC_LINK_EXPIRATION_MS);
 
   const payload = {
     vaId: va.id,

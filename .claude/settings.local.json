@@ -8,7 +8,12 @@
       "Bash(curl -s -H \"Authorization: token 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\" https://api.github.com/repos/cozy-afk/social-scheduler)",
       "Bash(curl -s -X PATCH -H \"Authorization: token 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\" -H \"Content-Type: application/json\" -d '{\"\"\"\"private\"\"\"\":true}' https://api.github.com/repos/cozy-afk/social-scheduler)",
       "Bash(find /workspaces/social-scheduler -maxdepth 1 -name .env* -o -name *.example)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/settings)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/settings)",
+      "Bash(ls:*)",
+      "Bash(npx typescript:*)",
+      "Bash(node_modules/.bin/tsc --noEmit 2>&1 | head -50 || echo \"TypeScript check complete\")",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

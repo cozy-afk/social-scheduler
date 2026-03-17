@@ -2,6 +2,7 @@
 
 import { Post } from '@/types/models';
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Music } from 'lucide-react';
+import { PLATFORM_THEMES, POST_TYPE_CONFIGS, getPostTypeColor } from '@/lib/constants/platform';
 
 interface PostPreviewProps {
   post: Post;
@@ -10,20 +11,23 @@ interface PostPreviewProps {
 }
 
 export default function PostPreview({ post, modelName, modelProfileImage }: PostPreviewProps) {
-  if (post.platform === 'instagram') {
-    return <InstagramPreview post={post} modelName={modelName} modelProfileImage={modelProfileImage} />;
-  } else if (post.platform === 'tiktok') {
-    return <TikTokPreview post={post} modelName={modelName} modelProfileImage={modelProfileImage} />;
-  } else if (post.platform === 'x') {
-    return <XPreview post={post} modelName={modelName} modelProfileImage={modelProfileImage} />;
-  } else if (post.platform === 'threads') {
-    return <ThreadsPreview post={post} modelName={modelName} modelProfileImage={modelProfileImage} />;
+  switch (post.platform) {
+    case 'instagram':
+      return <InstagramPreview post={post} modelName={modelName} modelProfileImage={modelProfileImage} />;
+    case 'tiktok':
+      return <TikTokPreview post={post} modelName={modelName} modelProfileImage={modelProfileImage} />;
+    case 'x':
+      return <XPreview post={post} modelName={modelName} modelProfileImage={modelProfileImage} />;
+    case 'threads':
+      return <ThreadsPreview post={post} modelName={modelName} modelProfileImage={modelProfileImage} />;
+    default:
+      return null;
   }
-
-  return null;
 }
 
 function InstagramPreview({ post, modelName, modelProfileImage }: PostPreviewProps) {
+  const theme = PLATFORM_THEMES.instagram;
+  const postTypeConfig = POST_TYPE_CONFIGS[post.postType];
   const isStory = post.postType === 'instagram_story';
   const isReel = post.postType === 'instagram_reel';
 
@@ -124,6 +128,7 @@ function InstagramPreview({ post, modelName, modelProfileImage }: PostPreviewPro
 }
 
 function TikTokPreview({ post, modelName, modelProfileImage }: PostPreviewProps) {
+  const postTypeConfig = POST_TYPE_CONFIGS[post.postType];
   const isStory = post.postType === 'tiktok_story';
 
   return (
@@ -187,9 +192,7 @@ function XPreview({ post, modelName, modelProfileImage }: PostPreviewProps) {
       {/* X/Twitter Post */}
       <div className="p-4">
         <div className="flex gap-3">
-          <div className="w-12 h-12 rounded-full bg-gray-300 flex-shrink-0 flex items-center justify-center text-xl">
-            {modelProfileImage || '👤'}
-          </div>
+          <div className="w-12 h-12 rounded-full bg-gray-300 flex-shrink-0 flex items-center justify-center text-xl">{modelProfileImage || '👤'}</div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1 mb-1">
               <span className="font-bold text-sm">{modelName}</span>
@@ -197,11 +200,9 @@ function XPreview({ post, modelName, modelProfileImage }: PostPreviewProps) {
               <span className="text-gray-500 text-sm">· 2h</span>
             </div>
             <p className="text-sm mb-3 whitespace-pre-wrap">{post.description}</p>
-            
+
             {post.assets.length > 0 && (
-              <div className={`rounded-2xl overflow-hidden border border-gray-200 ${
-                post.assets.length === 1 ? 'aspect-video' : 'grid grid-cols-2 gap-0.5'
-              }`}>
+              <div className={`rounded-2xl overflow-hidden border border-gray-200 ${post.assets.length === 1 ? 'aspect-video' : 'grid grid-cols-2 gap-0.5'}`}>
                 {post.assets.slice(0, 4).map((asset, idx) => (
                   <div key={idx} className="bg-gray-100 aspect-square flex items-center justify-center">
                     <div className="text-gray-400 text-4xl">🖼️</div>
@@ -217,7 +218,7 @@ function XPreview({ post, modelName, modelProfileImage }: PostPreviewProps) {
               </div>
               <div className="flex items-center gap-1 cursor-pointer hover:text-green-500">
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M7 16V4M17 8v12M3 12h18" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M7 16V4M17 8v12M3 12h18" strokeWidth="2" strokeLinecap="round" />
                 </svg>
                 <span className="text-xs">892</span>
               </div>
@@ -240,20 +241,17 @@ function XPreview({ post, modelName, modelProfileImage }: PostPreviewProps) {
 }
 
 function ThreadsPreview({ post, modelName, modelProfileImage }: PostPreviewProps) {
-  // Threads is very similar to X but with Meta styling
   return (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-lg" style={{ width: 598 }}>
       <div className="p-4">
         <div className="flex gap-3">
-          <div className="w-10 h-10 rounded-full bg-gray-300 flex-shrink-0 flex items-center justify-center text-lg">
-            {modelProfileImage || '👤'}
-          </div>
+          <div className="w-10 h-10 rounded-full bg-gray-300 flex-shrink-0 flex items-center justify-center text-lg">{modelProfileImage || '👤'}</div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-1">
                 <span className="font-semibold text-sm">{modelName.toLowerCase().replace(/\s/g, '')}</span>
                 <svg className="w-3 h-3 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div className="flex items-center gap-2 text-gray-500">
@@ -262,7 +260,7 @@ function ThreadsPreview({ post, modelName, modelProfileImage }: PostPreviewProps
               </div>
             </div>
             <p className="text-sm mb-3">{post.description}</p>
-            
+
             {post.assets.length > 0 && (
               <div className="rounded-xl overflow-hidden mb-3">
                 <div className="bg-gray-100 aspect-square flex items-center justify-center">
@@ -275,7 +273,7 @@ function ThreadsPreview({ post, modelName, modelProfileImage }: PostPreviewProps
               <Heart className="w-5 h-5 cursor-pointer hover:text-red-500" />
               <MessageCircle className="w-5 h-5 cursor-pointer hover:text-gray-700" />
               <svg className="w-5 h-5 cursor-pointer hover:text-gray-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M7 16V4M17 8v12M3 12h18" strokeLinecap="round"/>
+                <path d="M7 16V4M17 8v12M3 12h18" strokeLinecap="round" />
               </svg>
               <Send className="w-5 h-5 cursor-pointer hover:text-gray-700" />
             </div>

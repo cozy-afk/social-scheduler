@@ -5,16 +5,7 @@
  * Strips original metadata and applies iPhone 15 Pro EXIF data for VA downloads
  */
 
-export interface EXIFPreset {
-  device: string;
-  model: string;
-  lens: string;
-  software: string;
-  gpsLatitude: number;
-  gpsLongitude: number;
-  isoVariance: number[];
-  focalLengthVariance: number[];
-}
+import { EXIFPreset } from '@/types/utils';
 
 // iPhone 15 Pro EXIF preset
 export const IPHONE_15_PRO_PRESET: EXIFPreset = {
@@ -147,24 +138,28 @@ export async function downloadWithSpoofedEXIF(
     ctx.drawImage(img, 0, 0);
     
     // Convert to blob and download
-    canvas.toBlob((newBlob) => {
-      if (!newBlob) {
-        throw new Error('Failed to create blob');
-      }
-      
-      // Create download link
-      const url = URL.createObjectURL(newBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      // Clean up
-      URL.revokeObjectURL(img.src);
-    }, 'image/jpeg', 0.95);
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((newBlob) => {
+        if (!newBlob) {
+          reject(new Error('Failed to create blob'));
+          return;
+        }
+
+        // Create download link
+        const url = URL.createObjectURL(newBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        // Clean up
+        URL.revokeObjectURL(img.src);
+        resolve();
+      }, 'image/jpeg', 0.95);
+    });
     
   } catch (error) {
     console.error('Error downloading image with spoofed EXIF:', error);
@@ -202,7 +197,7 @@ export async function processImageWithEXIFServerSide(
  */
 export function generateVAFilename(modelName: string, originalFileName: string): string {
   const timestamp = Date.now();
-  const ext = originalFileName.split('.').pop() || 'jpg';
+  const ext = originalFileName.split('.').pop() ?? 'jpg';
   const sanitizedName = modelName.toLowerCase().replace(/[^a-z0-9]/g, '-');
   return `${sanitizedName}_${timestamp}.${ext}`;
 }

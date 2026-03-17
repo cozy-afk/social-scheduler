@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Film, CheckCircle2 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { CropRatio, GalleryAsset, StagedAsset, StagedVariant } from '@/types/models';
@@ -20,8 +21,7 @@ interface CropPreviewCardProps {
 }
 
 function CropPreviewCard({ asset, ratio, variant, onEdit }: CropPreviewCardProps) {
-  const [w, h] =
-    ratio === '1:1' ? [1, 1] : ratio === '4:5' ? [4, 5] : [9, 16];
+  const [w, h] = useMemo(() => (ratio === '1:1' ? [1, 1] : ratio === '4:5' ? [4, 5] : [9, 16]), [ratio]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -37,16 +37,9 @@ function CropPreviewCard({ asset, ratio, variant, onEdit }: CropPreviewCardProps
       </div>
 
       {/* Preview container */}
-      <div
-        className="relative rounded-xl overflow-hidden bg-slate-800 border border-slate-700 w-full"
-        style={{ aspectRatio: `${w}/${h}` }}
-      >
+      <div className="relative rounded-xl overflow-hidden bg-slate-800 border border-slate-700 w-full" style={{ aspectRatio: `${w}/${h}` }}>
         {asset.fileType === 'image' ? (
-          <img
-            src={variant.editResult?.url || asset.fileUrl}
-            alt=""
-            className="w-full h-full object-cover"
-          />
+          <img src={variant.editResult?.url || asset.fileUrl} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Film className="w-8 h-8 text-slate-600" />
@@ -54,27 +47,21 @@ function CropPreviewCard({ asset, ratio, variant, onEdit }: CropPreviewCardProps
         )}
 
         {/* Edited border ring */}
-        {variant.edited && (
-          <div className="absolute inset-0 border-2 border-green-500/60 rounded-xl pointer-events-none" />
-        )}
+        {variant.edited && <div className="absolute inset-0 border-2 border-green-500/60 rounded-xl pointer-events-none" />}
 
         {/* Filter badge */}
-        {variant.editResult?.namedFilter &&
-          variant.editResult.namedFilter !== 'Normal' &&
-          variant.editResult.namedFilter !== '' && (
-            <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded font-medium">
-              {variant.editResult.namedFilter}
-            </div>
-          )}
+        {variant.editResult?.namedFilter && variant.editResult.namedFilter !== 'Normal' && variant.editResult.namedFilter !== '' && (
+          <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded font-medium">
+            {variant.editResult.namedFilter}
+          </div>
+        )}
       </div>
 
       {/* Edit / Re-edit button */}
       <button
         onClick={onEdit}
         className={`w-full text-xs py-2 rounded-lg font-medium transition-all ${
-          variant.edited
-            ? 'btn-secondary border-green-500/30'
-            : 'btn-primary'
+          variant.edited ? 'btn-secondary border-green-500/30' : 'btn-primary'
         }`}
       >
         {variant.edited ? 'Re-edit' : 'Edit'}
@@ -93,7 +80,7 @@ interface AssetRowProps {
 
 function AssetRow({ stagedAsset, onEditVariant, onSkip }: AssetRowProps) {
   const { asset, variants } = stagedAsset;
-  const editedVariants = variants.filter((v) => v.edited).length;
+  const editedVariants = useMemo(() => variants.filter((v) => v.edited).length, [variants]);
 
   return (
     <div className="border-b border-slate-800 p-4 sm:p-6 space-y-4">
@@ -102,28 +89,19 @@ function AssetRow({ stagedAsset, onEditVariant, onSkip }: AssetRowProps) {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-800 flex-shrink-0 flex items-center justify-center">
             {asset.fileType === 'image' ? (
-              <img
-                src={asset.thumbnailUrl || asset.fileUrl}
-                alt=""
-                className="w-full h-full object-cover"
-              />
+              <img src={asset.thumbnailUrl || asset.fileUrl} alt="" className="w-full h-full object-cover" />
             ) : (
               <Film className="w-5 h-5 text-slate-500" />
             )}
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-200 truncate max-w-[200px]">
-              {asset.fileName}
-            </p>
+            <p className="text-sm font-medium text-slate-200 truncate max-w-[200px]">{asset.fileName}</p>
             <p className="text-xs text-slate-500">
-              {editedVariants}/{3} crops edited
+              {editedVariants}/3 crops edited
             </p>
           </div>
         </div>
-        <button
-          onClick={() => onSkip(asset.id)}
-          className="btn-ghost text-xs text-slate-500 hover:text-red-400"
-        >
+        <button onClick={() => onSkip(asset.id)} className="btn-ghost text-xs text-slate-500 hover:text-red-400">
           Skip
         </button>
       </div>
@@ -132,15 +110,7 @@ function AssetRow({ stagedAsset, onEditVariant, onSkip }: AssetRowProps) {
       <div className="grid grid-cols-3 gap-3">
         {(['1:1', '4:5', '9:16'] as CropRatio[]).map((ratio) => {
           const variant = variants.find((v) => v.ratio === ratio)!;
-          return (
-            <CropPreviewCard
-              key={ratio}
-              asset={asset}
-              ratio={ratio}
-              variant={variant}
-              onEdit={() => onEditVariant(asset.id, ratio)}
-            />
-          );
+          return <CropPreviewCard key={ratio} asset={asset} ratio={ratio} variant={variant} onEdit={() => onEditVariant(asset.id, ratio)} />;
         })}
       </div>
     </div>
@@ -150,15 +120,14 @@ function AssetRow({ stagedAsset, onEditVariant, onSkip }: AssetRowProps) {
 // ─── StagingView ──────────────────────────────────────────────────────────────
 
 export default function StagingView({ onEditVariant }: StagingViewProps) {
-  const { stagedAssets, clearStaging, skipStagedAsset, setWorkflowStep } =
-    useStore();
+  const { stagedAssets, clearStaging, skipStagedAsset, setWorkflowStep } = useStore();
 
-  const activeAssets = stagedAssets.filter((sa) => !sa.skipped);
+  const activeAssets = useMemo(() => stagedAssets.filter((sa) => !sa.skipped), [stagedAssets]);
 
   // Count total edited variants across all active assets
-  const editedCount = activeAssets.reduce(
-    (sum, sa) => sum + sa.variants.filter((v) => v.edited).length,
-    0
+  const editedCount = useMemo(
+    () => activeAssets.reduce((sum, sa) => sum + sa.variants.filter((v) => v.edited).length, 0),
+    [activeAssets]
   );
   const totalVariants = activeAssets.length * 3;
 
@@ -166,10 +135,7 @@ export default function StagingView({ onEditVariant }: StagingViewProps) {
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-10 bg-slate-900 border-b border-slate-700 px-4 sm:px-6 py-4 flex items-center justify-between flex-shrink-0">
-        <button
-          onClick={() => clearStaging()}
-          className="btn-ghost flex items-center gap-2 text-sm"
-        >
+        <button onClick={() => clearStaging()} className="btn-ghost flex items-center gap-2 text-sm">
           <ChevronLeft className="w-4 h-4" />
           Back to Gallery
         </button>
@@ -190,22 +156,12 @@ export default function StagingView({ onEditVariant }: StagingViewProps) {
           <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-500">
             <Film className="w-10 h-10 opacity-40" />
             <p className="text-sm">All assets have been skipped.</p>
-            <button
-              onClick={() => clearStaging()}
-              className="btn-secondary text-sm mt-2"
-            >
+            <button onClick={() => clearStaging()} className="btn-secondary text-sm mt-2">
               Back to Gallery
             </button>
           </div>
         ) : (
-          activeAssets.map((sa) => (
-            <AssetRow
-              key={sa.asset.id}
-              stagedAsset={sa}
-              onEditVariant={onEditVariant}
-              onSkip={skipStagedAsset}
-            />
-          ))
+          activeAssets.map((sa) => <AssetRow key={sa.asset.id} stagedAsset={sa} onEditVariant={onEditVariant} onSkip={skipStagedAsset} />)
         )}
       </div>
 
@@ -214,11 +170,7 @@ export default function StagingView({ onEditVariant }: StagingViewProps) {
         <p className="text-xs text-slate-500">
           {editedCount} of {totalVariants} crops edited
         </p>
-        <button
-          onClick={() => setWorkflowStep('scheduling')}
-          disabled={editedCount === 0}
-          className="btn-primary flex items-center gap-2 disabled:opacity-40"
-        >
+        <button onClick={() => setWorkflowStep('scheduling')} disabled={editedCount === 0} className="btn-primary flex items-center gap-2 disabled:opacity-40">
           Proceed to Scheduling
           <ChevronRight className="w-4 h-4" />
         </button>

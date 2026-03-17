@@ -4,24 +4,17 @@ import {
   PostReference, StagedAsset, StagedVariant, WorkflowStep, EditingTarget, CropRatio,
   Agency,
 } from '@/types/models';
+import { S3Config, MetaConfig, FanvueConfig } from '@/types/integrations';
 
-export interface S3Config {
-  bucket: string;
-  region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-}
+// Re-export integration types for convenience
+export type { S3Config, MetaConfig, FanvueConfig } from '@/types/integrations';
 
-export interface MetaConfig {
-  accountId: string;
-  accessToken: string;
-  igUserId: string;
-}
-
-export interface FanvueConfig {
-  accessToken: string;
-  userHandle?: string;
-}
+/** Default crop ratios for staging workflow */
+const DEFAULT_CROP_RATIOS: { ratio: CropRatio; edited: false }[] = [
+  { ratio: '1:1', edited: false },
+  { ratio: '4:5', edited: false },
+  { ratio: '9:16', edited: false },
+];
 
 interface AppState {
   // Current user
@@ -234,11 +227,7 @@ export const useStore = create<AppState>((set) => ({
     set({
       stagedAssets: assets.map((asset) => ({
         asset,
-        variants: [
-          { ratio: '1:1' as CropRatio,  edited: false },
-          { ratio: '4:5' as CropRatio,  edited: false },
-          { ratio: '9:16' as CropRatio, edited: false },
-        ],
+        variants: DEFAULT_CROP_RATIOS.map((v) => ({ ...v })),
         skipped: false,
       })),
       workflowStep: 'staging',

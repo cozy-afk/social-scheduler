@@ -1,3 +1,5 @@
+// ─── AI Provider Configuration ─────────────────────────────────────────────────────────
+
 export type AIProvider = 'anthropic' | 'openai' | 'glm-5' | 'custom';
 
 export interface AIProviderConfig {
@@ -31,6 +33,53 @@ export interface AISettings {
   };
 }
 
+export interface CaptionGenerationRequest {
+  platform: string;
+  postType: string;
+  exampleCaptions: string[];
+  maxLength: number;
+  style: string;
+}
+
+export interface CaptionGenerationResponse {
+  suggestions: string[];
+  provider: AIProvider;
+}
+
+// Provider-specific configurations
+export const AI_PROVIDERS = {
+  anthropic: {
+    name: 'Anthropic Claude',
+    models: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514'],
+    defaultModel: 'claude-sonnet-4-20250514',
+  },
+  openai: {
+    name: 'OpenAI GPT',
+    models: ['gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
+    defaultModel: 'gpt-4-turbo',
+  },
+  'glm-5': {
+    name: 'GLM (Zhipu AI)',
+    models: ['glm-4-plus', 'glm-4', 'glm-3-turbo'],
+    defaultModel: 'glm-4-plus',
+  },
+  custom: {
+    name: 'Custom Provider',
+    models: [],
+    defaultModel: '',
+  },
+} as const;
+
+// Environment variable names for each provider
+export const AI_ENV_KEYS = {
+  anthropic: 'ANTHROPIC_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  'glm-5': 'GLM5_API_KEY',
+  custom: 'CUSTOM_AI_API_KEY',
+} as const;
+
+// ─── Story Generation Configuration ─────────────────────────────────────────────────────────
+
 export interface StoryFolderConfig {
   id: string;
   name: string;
@@ -40,8 +89,10 @@ export interface StoryFolderConfig {
   weight: number; // probability weight for selection (1-10)
 }
 
+export type CropStrategy = 'center' | 'top' | 'bottom' | 'random' | 'face-detect' | 'rule-of-thirds';
+
 export interface StoryCropStrategy {
-  strategy: 'center' | 'top' | 'bottom' | 'random' | 'face-detect' | 'rule-of-thirds';
+  strategy: CropStrategy;
   params?: {
     faceDetectionConfidence?: number; // 0-1
     randomSeed?: number;

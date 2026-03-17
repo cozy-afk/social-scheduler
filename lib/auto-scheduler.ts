@@ -1,31 +1,11 @@
 import { createAIService } from './ai-service';
 import { Post, PostType, Platform, Asset, Model } from '@/types/models';
+import { AutoScheduleConfig, AutoScheduleResult } from '@/types/utils';
 
-export interface AutoScheduleConfig {
-  modelId: string;
-  model: Model;
-  daysToGenerate: number; // 1-7 days
-  assetsPool: Asset[]; // Available assets to schedule
-  existingPosts: Post[]; // Already scheduled posts to avoid conflicts
-  preferences?: {
-    preferredTimes?: string[]; // e.g., ["09:00", "13:00", "21:00"]
-    platformPriority?: Platform[]; // Which platforms to prioritize
-    minPostsPerDay?: number;
-    maxPostsPerDay?: number;
-    avoidWeekends?: boolean;
-  };
-}
-
-export interface AutoScheduleResult {
-  generatedPosts: Post[];
-  summary: {
-    totalPosts: number;
-    byPlatform: Record<Platform, number>;
-    byDay: Record<string, number>;
-  };
-  reasoning: string;
-  requiresApproval: boolean;
-}
+/** Default scheduling preferences */
+const DEFAULT_MIN_POSTS_PER_DAY = 3;
+const DEFAULT_MAX_POSTS_PER_DAY = 8;
+const DEFAULT_PLATFORMS: Platform[] = ['instagram', 'tiktok', 'x', 'threads'];
 
 /**
  * AI-powered auto-scheduler that decides:
@@ -37,54 +17,74 @@ export interface AutoScheduleResult {
 export async function autoSchedulePosts(
   config: AutoScheduleConfig
 ): Promise<AutoScheduleResult> {
-  const {
-    modelId,
-    model,
-    daysToGenerate,
-    assetsPool,
-    existingPosts,
-    preferences = {},
-  } = config;
+  const { daysToGenerate, assetsPool } = config;
+
+  if (assetsPool.length === 0) {
+    return {
+      generatedPosts: [],
+      summary: { totalPosts: 0, byPlatform: createEmptyPlatformCount(), byDay: {} },
+      reasoning: 'No assets available for scheduling',
+      requiresApproval: false,
+    };
+  }
 
   try {
-    const aiService = createAIService();
-
-    // Build scheduling prompt
-    const prompt = buildAutoSchedulePrompt(config);
-
-    // In production, this would call AI to make decisions
-    // For now, generate intelligent mock scheduling
     const generatedPosts = await generateIntelligentSchedule(config);
-
     const summary = calculateScheduleSummary(generatedPosts);
 
     return {
       generatedPosts,
       summary,
-      reasoning: `Generated ${summary.totalPosts} posts across ${daysToGenerate} days. Distributed evenly across platforms with focus on peak engagement times. Instagram and TikTok prioritized for visual content.`,
+      reasoning: buildReasoningMessage(summary, daysToGenerate),
       requiresApproval: true,
     };
   } catch (error) {
     console.error('Auto-scheduling failed:', error);
-    throw error;
+    throw new Error(
+      `Failed to generate schedule: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
+/**
+ * Build the reasoning message for the schedule result
+ */
+function buildReasoningMessage(
+  summary: AutoScheduleResult['summary'],
+  daysToGenerate: number
+): string {
+  return `Generated ${summary.totalPosts} posts across ${daysToGenerate} days. ` +
+    `Distributed evenly across platforms with focus on peak engagement times. ` +
+    `Instagram and TikTok prioritized for visual content.`;
+}
+
+/**
+ * Create an empty platform count record
+ */
+function createEmptyPlatformCount(): Record<Platform, number> {
+  return { instagram: 0, tiktok: 0, x: 0, threads: 0, fanvue: 0 };
+}
+
+/**
+ * Build the AI prompt for scheduling decisions (for future AI integration)
+ */
 function buildAutoSchedulePrompt(config: AutoScheduleConfig): string {
   const { model, daysToGenerate, assetsPool, existingPosts, preferences = {} } = config;
+  const videoCount = assetsPool.filter(a => a.fileType === 'video').length;
+  const imageCount = assetsPool.filter(a => a.fileType === 'image').length;
 
   return `You are an expert social media scheduler for OnlyFans creators.
 
 Model: ${model.name}
 Current posting schedule: ${JSON.stringify(model.postingSchedule)}
 Days to schedule: ${daysToGenerate}
-Available assets: ${assetsPool.length} (${assetsPool.filter(a => a.fileType === 'video').length} videos, ${assetsPool.filter(a => a.fileType === 'image').length} images)
+Available assets: ${assetsPool.length} (${videoCount} videos, ${imageCount} images)
 Already scheduled: ${existingPosts.length} posts
 
 Preferences:
 - Preferred times: ${preferences.preferredTimes?.join(', ') || 'Use model schedule'}
 - Platform priority: ${preferences.platformPriority?.join(', ') || 'All platforms equal'}
-- Posts per day: ${preferences.minPostsPerDay || 3}-${preferences.maxPostsPerDay || 10}
+- Posts per day: ${preferences.minPostsPerDay ?? DEFAULT_MIN_POSTS_PER_DAY}-${preferences.maxPostsPerDay ?? DEFAULT_MAX_POSTS_PER_DAY}
 
 Task: Create an optimal posting schedule that:
 1. Distributes content across platforms strategically
@@ -110,46 +110,39 @@ async function generateIntelligentSchedule(
     model,
     daysToGenerate,
     assetsPool,
-    existingPosts,
     preferences = {},
   } = config;
 
   const generatedPosts: Post[] = [];
   const today = new Date();
 
-  // Get posting times from model schedule or preferences
-  const postingTimes = preferences.preferredTimes || 
+  const postingTimes = preferences.preferredTimes ??
     [...new Set(model.postingSchedule.map(s => s.time))];
 
-  // Determine posts per day
-  const minPerDay = preferences.minPostsPerDay || 3;
-  const maxPerDay = preferences.maxPostsPerDay || 8;
+  if (postingTimes.length === 0) {
+    postingTimes.push('09:00', '13:00', '18:00', '21:00');
+  }
+
+  const minPerDay = preferences.minPostsPerDay ?? DEFAULT_MIN_POSTS_PER_DAY;
+  const maxPerDay = preferences.maxPostsPerDay ?? DEFAULT_MAX_POSTS_PER_DAY;
   const postsPerDay = Math.floor(Math.random() * (maxPerDay - minPerDay + 1)) + minPerDay;
 
   let assetIndex = 0;
 
-  for (let day = 0; day < daysToGenerate; day++) {
+  for (let day = 0; day < daysToGenerate && assetIndex < assetsPool.length; day++) {
     const currentDate = new Date(today);
     currentDate.setDate(today.getDate() + day);
 
-    // Skip weekends if preference set
-    if (preferences.avoidWeekends && (currentDate.getDay() === 0 || currentDate.getDay() === 6)) {
+    if (preferences.avoidWeekends && isWeekend(currentDate)) {
       continue;
     }
-
-    // Distribute posts across platforms
-    const daysPosts: Post[] = [];
 
     for (let i = 0; i < postsPerDay && assetIndex < assetsPool.length; i++) {
       const asset = assetsPool[assetIndex];
       const time = postingTimes[i % postingTimes.length];
-
-      // Decide platform and post type based on asset
       const { platform, postType } = decidePostStrategy(asset, preferences.platformPriority);
 
-      const scheduledTime = new Date(currentDate);
-      const [hours, minutes] = time.split(':');
-      scheduledTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      const scheduledTime = parseTimeToDate(currentDate, time);
 
       const post: Post = {
         id: `auto-${Date.now()}-${assetIndex}`,
@@ -157,8 +150,8 @@ async function generateIntelligentSchedule(
         platform,
         postType,
         scheduledTime: scheduledTime.toISOString(),
-        status: 'draft', // Requires approval
-        description: '', // Will be generated separately
+        status: 'draft',
+        description: '',
         assets: [asset],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -166,69 +159,93 @@ async function generateIntelligentSchedule(
         approvalStatus: 'pending',
       };
 
-      daysPosts.push(post);
+      generatedPosts.push(post);
       assetIndex++;
     }
-
-    generatedPosts.push(...daysPosts);
   }
 
   return generatedPosts;
 }
 
+/**
+ * Check if a date falls on a weekend
+ */
+function isWeekend(date: Date): boolean {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+
+/**
+ * Parse a time string (HH:MM) into a date
+ */
+function parseTimeToDate(date: Date, time: string): Date {
+  const [hours, minutes] = time.split(':').map(Number);
+  const result = new Date(date);
+  result.setHours(hours ?? 9, minutes ?? 0, 0, 0);
+  return result;
+}
+
+/**
+ * Decide the platform and post type based on asset characteristics
+ */
 function decidePostStrategy(
   asset: Asset,
   platformPriority?: Platform[]
 ): { platform: Platform; postType: PostType } {
   const isVideo = asset.fileType === 'video';
 
-  // Video assets -> Reels
   if (isVideo) {
-    const platform: Platform = platformPriority?.[0] || (Math.random() > 0.5 ? 'instagram' : 'tiktok');
+    const platform = platformPriority?.[0] ?? randomChoice(['instagram', 'tiktok'] as const);
     return {
       platform,
       postType: platform === 'instagram' ? 'instagram_reel' : 'tiktok_reel',
     };
   }
 
-  // Image assets -> Posts or Stories
-  const platforms: Platform[] = platformPriority || ['instagram', 'tiktok', 'x', 'threads'];
-  const platform = platforms[Math.floor(Math.random() * platforms.length)];
+  const platforms = platformPriority ?? DEFAULT_PLATFORMS;
+  const platform = randomChoice(platforms);
 
-  if (platform === 'instagram') {
-    // 70% posts, 30% stories
-    return Math.random() > 0.3
-      ? { platform, postType: 'instagram_post' }
-      : { platform, postType: 'instagram_story' };
-  } else if (platform === 'tiktok') {
-    // 60% slideshows, 40% stories
-    return Math.random() > 0.4
-      ? { platform, postType: 'tiktok_slideshow' }
-      : { platform, postType: 'tiktok_story' };
-  } else if (platform === 'x') {
-    return { platform, postType: 'x_post' };
-  } else {
-    return { platform, postType: 'threads_post' };
+  switch (platform) {
+    case 'instagram':
+      return randomChoice([
+        { platform, postType: 'instagram_post' as const },
+        { platform, postType: 'instagram_post' as const },
+        { platform, postType: 'instagram_story' as const },
+      ]);
+    case 'tiktok':
+      return randomChoice([
+        { platform, postType: 'tiktok_slideshow' as const },
+        { platform, postType: 'tiktok_slideshow' as const },
+        { platform, postType: 'tiktok_story' as const },
+      ]);
+    case 'x':
+      return { platform, postType: 'x_post' };
+    case 'threads':
+      return { platform, postType: 'threads_post' };
+    default:
+      return { platform: 'instagram', postType: 'instagram_post' };
   }
 }
 
-function calculateScheduleSummary(posts: Post[]) {
-  const byPlatform: Record<Platform, number> = {
-    instagram: 0,
-    tiktok: 0,
-    x: 0,
-    threads: 0,
-    fanvue: 0,
-  };
+/**
+ * Pick a random element from an array
+ */
+function randomChoice<T>(arr: readonly T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
+/**
+ * Calculate summary statistics for generated posts
+ */
+function calculateScheduleSummary(posts: Post[]): AutoScheduleResult['summary'] {
+  const byPlatform = createEmptyPlatformCount();
   const byDay: Record<string, number> = {};
 
-  posts.forEach(post => {
+  for (const post of posts) {
     byPlatform[post.platform]++;
-
-    const day = new Date(post.scheduledTime).toISOString().split('T')[0];
-    byDay[day] = (byDay[day] || 0) + 1;
-  });
+    const day = post.scheduledTime.split('T')[0];
+    byDay[day] = (byDay[day] ?? 0) + 1;
+  }
 
   return {
     totalPosts: posts.length,
@@ -242,10 +259,9 @@ function calculateScheduleSummary(posts: Post[]) {
  */
 export async function generateCaptionsForScheduledPosts(
   posts: Post[],
-  captionLibrary: any[]
+  _captionLibrary: unknown[]
 ): Promise<Post[]> {
-  // For each post, generate appropriate caption based on platform/type
-  // This would use the AI service
+  // TODO: Integrate with AI service for caption generation
   return posts.map(post => ({
     ...post,
     description: 'Auto-generated caption (to be implemented)',

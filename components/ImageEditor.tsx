@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { INSTAGRAM_FILTERS } from '@/lib/instagram-filters';
 import type { CropRatio } from '@/types/models';
+import type { EditorTool, LocalCropRatio } from '@/types/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,9 +49,6 @@ export interface ImageEditorResult {
   filters: FilterState;
   overlays: OverlayItem[];
 }
-
-type EditorTool = 'filters' | 'crop' | 'enhance' | 'text' | 'emoji';
-type LocalCropRatio = 'free' | '1:1' | '4:5' | '9:16' | '16:9';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

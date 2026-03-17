@@ -1,75 +1,17 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Check, Film } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { CropRatio, GalleryAsset, Platform, PostType, StagedVariant } from '@/types/models';
 import {
-  CropRatio,
-  GalleryAsset,
-  Platform,
-  PostType,
-  StagedVariant,
-} from '@/types/models';
-
-// ─── Platform metadata ────────────────────────────────────────────────────────
-
-const PLATFORM_ACTIVE: Record<Platform, string> = {
-  instagram: 'border-pink-500/60 bg-pink-500/15 text-pink-300',
-  tiktok: 'border-red-500/60 bg-red-500/15 text-red-300',
-  x: 'border-slate-400/60 bg-slate-500/15 text-slate-200',
-  threads: 'border-purple-500/60 bg-purple-500/15 text-purple-300',
-  fanvue: 'border-orange-500/60 bg-orange-500/15 text-orange-300',
-};
-
-const PLATFORM_ICON: Record<Platform, string> = {
-  instagram: '📸',
-  tiktok: '🎵',
-  x: '𝕏',
-  threads: '🧵',
-  fanvue: '🎭',
-};
-
-const PLATFORM_LABEL: Record<Platform, string> = {
-  instagram: 'Instagram',
-  tiktok: 'TikTok',
-  x: 'X',
-  threads: 'Threads',
-  fanvue: 'Fanvue',
-};
-
-const RATIO_PRESETS: Record<CropRatio, Platform[]> = {
-  '1:1': ['instagram', 'threads', 'fanvue'],
-  '4:5': ['instagram', 'fanvue'],
-  '9:16': ['instagram', 'tiktok'],
-};
-
-const POST_TYPE_MAP: Record<Platform, Record<CropRatio, PostType>> = {
-  instagram: {
-    '1:1': 'instagram_post',
-    '4:5': 'instagram_post',
-    '9:16': 'instagram_reel',
-  },
-  tiktok: {
-    '1:1': 'tiktok_slideshow',
-    '4:5': 'tiktok_slideshow',
-    '9:16': 'tiktok_reel',
-  },
-  x: {
-    '1:1': 'x_post',
-    '4:5': 'x_post',
-    '9:16': 'x_post',
-  },
-  threads: {
-    '1:1': 'threads_post',
-    '4:5': 'threads_post',
-    '9:16': 'threads_post',
-  },
-  fanvue: {
-    '1:1': 'fanvue_post',
-    '4:5': 'fanvue_post',
-    '9:16': 'fanvue_post',
-  },
-};
+  PLATFORM_THEMES,
+  RATIO_TO_PLATFORMS,
+  PLATFORM_RATIO_TO_POST_TYPE,
+  getPlatformTheme,
+  getPlatformsForRatio,
+  getPostTypeForPlatformAndRatio,
+} from '@/lib/constants/platform';
 
 // ─── Card state ───────────────────────────────────────────────────────────────
 
@@ -90,44 +32,34 @@ interface FinalAssetCardProps {
   onChange: (next: Partial<CardState>) => void;
 }
 
-function FinalAssetCard({
-  asset,
-  ratio,
-  variant,
-  state,
-  onChange,
-}: FinalAssetCardProps) {
+function FinalAssetCard({ asset, ratio, variant, state, onChange }: FinalAssetCardProps) {
   const { selectedPlatforms, date, time, description } = state;
 
   const previewWidth = ratio === '9:16' ? 56 : 80;
-  const previewHeight =
-    ratio === '9:16' ? 100 : ratio === '4:5' ? 100 : 80;
+  const previewHeight = ratio === '9:16' ? 100 : ratio === '4:5' ? 100 : 80;
 
-  function togglePlatform(p: Platform) {
-    const next = selectedPlatforms.includes(p)
-      ? selectedPlatforms.filter((x) => x !== p)
-      : [...selectedPlatforms, p];
-    onChange({ selectedPlatforms: next });
-  }
+  const togglePlatform = useCallback(
+    (p: Platform) => {
+      const next = selectedPlatforms.includes(p) ? selectedPlatforms.filter((x) => x !== p) : [...selectedPlatforms, p];
+      onChange({ selectedPlatforms: next });
+    },
+    [selectedPlatforms, onChange]
+  );
 
-  function applyPreset(r: CropRatio) {
-    onChange({ selectedPlatforms: RATIO_PRESETS[r] });
-  }
+  const applyPreset = useCallback(
+    (r: CropRatio) => {
+      onChange({ selectedPlatforms: RATIO_TO_PLATFORMS[r] });
+    },
+    [onChange]
+  );
 
   return (
     <div className="card p-4 space-y-4">
       {/* Top: thumbnail + ratio badge + file name */}
       <div className="flex gap-4 items-start">
-        <div
-          className="flex-shrink-0 rounded-xl overflow-hidden bg-slate-800"
-          style={{ width: previewWidth, height: previewHeight }}
-        >
+        <div className="flex-shrink-0 rounded-xl overflow-hidden bg-slate-800" style={{ width: previewWidth, height: previewHeight }}>
           {asset.fileType === 'image' ? (
-            <img
-              src={variant.editResult!.url}
-              alt=""
-              className="w-full h-full object-cover"
-            />
+            <img src={variant.editResult!.url} alt="" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <Film className="w-6 h-6 text-slate-600" />
@@ -137,19 +69,12 @@ function FinalAssetCard({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full font-mono">
-              {ratio}
-            </span>
-            <p className="text-sm font-medium text-slate-200 truncate">
-              {asset.fileName}
-            </p>
+            <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full font-mono">{ratio}</span>
+            <p className="text-sm font-medium text-slate-200 truncate">{asset.fileName}</p>
           </div>
-          {variant.editResult?.namedFilter &&
-            variant.editResult.namedFilter !== '' && (
-              <p className="text-xs text-slate-500">
-                Filter: {variant.editResult.namedFilter}
-              </p>
-            )}
+          {variant.editResult?.namedFilter && variant.editResult.namedFilter !== '' && (
+            <p className="text-xs text-slate-500">Filter: {variant.editResult.namedFilter}</p>
+          )}
         </div>
       </div>
 
@@ -158,6 +83,7 @@ function FinalAssetCard({
         <label className="label-dark">Platforms</label>
         <div className="flex flex-wrap gap-2">
           {(['instagram', 'tiktok', 'x', 'threads', 'fanvue'] as Platform[]).map((p) => {
+            const theme = getPlatformTheme(p);
             const isSelected = selectedPlatforms.includes(p);
             return (
               <button
@@ -165,14 +91,12 @@ function FinalAssetCard({
                 type="button"
                 onClick={() => togglePlatform(p)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
-                  isSelected
-                    ? PLATFORM_ACTIVE[p]
-                    : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600'
+                  isSelected ? theme.active : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600'
                 }`}
               >
                 {isSelected && <Check className="w-3 h-3" />}
-                <span>{PLATFORM_ICON[p]}</span>
-                {PLATFORM_LABEL[p]}
+                <span>{theme.icon}</span>
+                {theme.label}
               </button>
             );
           })}
@@ -203,21 +127,11 @@ function FinalAssetCard({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label-dark">Date</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => onChange({ date: e.target.value })}
-            className="input-dark"
-          />
+          <input type="date" value={date} onChange={(e) => onChange({ date: e.target.value })} className="input-dark" />
         </div>
         <div>
           <label className="label-dark">Time</label>
-          <input
-            type="time"
-            value={time}
-            onChange={(e) => onChange({ time: e.target.value })}
-            className="input-dark"
-          />
+          <input type="time" value={time} onChange={(e) => onChange({ time: e.target.value })} className="input-dark" />
         </div>
       </div>
     </div>
@@ -227,13 +141,11 @@ function FinalAssetCard({
 // ─── BatchScheduler ───────────────────────────────────────────────────────────
 
 export default function BatchScheduler() {
-  const { stagedAssets, clearStaging, setWorkflowStep, addPost, selectedModelId } =
-    useStore();
+  const { stagedAssets, clearStaging, setWorkflowStep, addPost, selectedModelId } = useStore();
 
   // Build the flat list of (asset, ratio, variant) tuples to schedule
   const editedEntries = useMemo(() => {
-    const entries: { asset: GalleryAsset; ratio: CropRatio; variant: StagedVariant }[] =
-      [];
+    const entries: { asset: GalleryAsset; ratio: CropRatio; variant: StagedVariant }[] = [];
     for (const sa of stagedAssets) {
       if (sa.skipped) continue;
       for (const v of sa.variants) {
@@ -246,26 +158,28 @@ export default function BatchScheduler() {
   }, [stagedAssets]);
 
   // Lifted card state array — one entry per editedEntry
-  const [cardStates, setCardStates] = useState<CardState[]>(() =>
-    editedEntries.map(({ ratio }) => ({
-      selectedPlatforms: RATIO_PRESETS[ratio],
-      date: '',
-      time: '09:00',
-      description: '',
-    }))
+  const [cardStates, setCardStates] = useState<CardState[]>(
+    () =>
+      editedEntries.map(({ ratio }) => ({
+        selectedPlatforms: RATIO_TO_PLATFORMS[ratio],
+        date: '',
+        time: '09:00',
+        description: '',
+      }))
   );
 
   // Apply-to-all bar state
   const [globalDate, setGlobalDate] = useState('');
   const [globalTime, setGlobalTime] = useState('09:00');
 
-  function updateCard(index: number, next: Partial<CardState>) {
-    setCardStates((prev) =>
-      prev.map((s, i) => (i === index ? { ...s, ...next } : s))
-    );
-  }
+  const updateCard = useCallback(
+    (index: number, next: Partial<CardState>) => {
+      setCardStates((prev) => prev.map((s, i) => (i === index ? { ...s, ...next } : s)));
+    },
+    []
+  );
 
-  function applyToAll() {
+  const applyToAll = useCallback(() => {
     setCardStates((prev) =>
       prev.map((s) => ({
         ...s,
@@ -273,25 +187,25 @@ export default function BatchScheduler() {
         ...(globalTime ? { time: globalTime } : {}),
       }))
     );
-  }
+  }, [globalDate, globalTime]);
 
-  const readyCount = cardStates.filter(
-    (s) => s.date !== '' && s.selectedPlatforms.length > 0
-  ).length;
+  const readyCount = useMemo(
+    () => cardStates.filter((s) => s.date !== '' && s.selectedPlatforms.length > 0).length,
+    [cardStates]
+  );
 
-  function handleSchedule() {
+  const handleSchedule = useCallback(() => {
     editedEntries.forEach(({ asset, ratio, variant }, i) => {
       const { selectedPlatforms, date, time, description } = cardStates[i];
       if (!date || selectedPlatforms.length === 0) return;
 
       selectedPlatforms.forEach((platform) => {
+        const postType = getPostTypeForPlatformAndRatio(platform, ratio);
         addPost({
-          id: `post-${Date.now()}-${platform}-${Math.random()
-            .toString(36)
-            .slice(2)}`,
+          id: `post-${Date.now()}-${platform}-${Math.random().toString(36).slice(2)}`,
           modelId: selectedModelId || 'default',
           platform,
-          postType: POST_TYPE_MAP[platform][ratio],
+          postType,
           scheduledTime: `${date}T${time || '09:00'}:00`,
           status: 'scheduled',
           description,
@@ -313,16 +227,13 @@ export default function BatchScheduler() {
 
     clearStaging();
     setWorkflowStep('gallery');
-  }
+  }, [editedEntries, cardStates, selectedModelId, addPost, clearStaging, setWorkflowStep]);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 overflow-y-auto no-scrollbar">
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-10 bg-slate-900 border-b border-slate-700 px-4 sm:px-6 py-4 flex items-center justify-between">
-        <button
-          onClick={() => setWorkflowStep('staging')}
-          className="btn-ghost flex items-center gap-2 text-sm"
-        >
+        <button onClick={() => setWorkflowStep('staging')} className="btn-ghost flex items-center gap-2 text-sm">
           <ChevronLeft className="w-4 h-4" />
           Back to Staging
         </button>
@@ -330,8 +241,7 @@ export default function BatchScheduler() {
         <div className="text-center">
           <h2 className="text-base font-bold text-white">Schedule Batch</h2>
           <p className="text-xs text-slate-400">
-            {editedEntries.length} post{editedEntries.length !== 1 ? 's' : ''}{' '}
-            ready
+            {editedEntries.length} post{editedEntries.length !== 1 ? 's' : ''} ready
           </p>
         </div>
 
@@ -345,10 +255,7 @@ export default function BatchScheduler() {
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500">
             <Calendar className="w-10 h-10 opacity-40" />
             <p className="text-sm">No edited variants to schedule.</p>
-            <button
-              onClick={() => setWorkflowStep('staging')}
-              className="btn-secondary text-sm mt-2"
-            >
+            <button onClick={() => setWorkflowStep('staging')} className="btn-secondary text-sm mt-2">
               Back to Staging
             </button>
           </div>
@@ -356,9 +263,7 @@ export default function BatchScheduler() {
           <>
             {/* Apply to all bar */}
             <div className="card p-4 flex flex-col sm:flex-row gap-3 items-end">
-              <div className="text-sm font-medium text-slate-300 whitespace-nowrap">
-                Apply to all:
-              </div>
+              <div className="text-sm font-medium text-slate-300 whitespace-nowrap">Apply to all:</div>
               <div className="flex gap-3 flex-1 w-full">
                 <input
                   type="date"
@@ -373,10 +278,7 @@ export default function BatchScheduler() {
                   className="input-dark"
                   style={{ width: 130 }}
                 />
-                <button
-                  onClick={applyToAll}
-                  className="btn-secondary text-sm whitespace-nowrap"
-                >
+                <button onClick={applyToAll} className="btn-secondary text-sm whitespace-nowrap">
                   Apply
                 </button>
               </div>
@@ -384,14 +286,7 @@ export default function BatchScheduler() {
 
             {/* Individual cards */}
             {editedEntries.map(({ asset, ratio, variant }, i) => (
-              <FinalAssetCard
-                key={`${asset.id}-${ratio}`}
-                asset={asset}
-                ratio={ratio}
-                variant={variant}
-                state={cardStates[i]}
-                onChange={(next) => updateCard(i, next)}
-              />
+              <FinalAssetCard key={`${asset.id}-${ratio}`} asset={asset} ratio={ratio} variant={variant} state={cardStates[i]} onChange={(next) => updateCard(i, next)} />
             ))}
           </>
         )}

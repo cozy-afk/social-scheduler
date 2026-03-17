@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, addDays, addWeeks, addMonths, startOfWeek, startOfMonth, endOfWeek, endOfMonth, eachDayOfInterval } from 'date-fns';
-
-type CalendarViewType = 'day' | 'week' | 'month';
+import type { CalendarViewType } from '@/types/utils';
 
 interface CalendarViewSwitcherProps {
   currentView: CalendarViewType;

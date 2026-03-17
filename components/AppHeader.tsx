@@ -4,8 +4,7 @@ import { useStore } from '@/lib/store';
 import ModelSwitcher from '@/components/ModelSwitcher';
 import { Users, Calendar, FileText, LayoutGrid, Zap, Boxes, BarChart2, Settings } from 'lucide-react';
 import Link from 'next/link';
-
-export type ActivePage = 'calendar' | 'captions' | 'va' | 'models' | 'gallery' | 'analytics' | 'settings';
+import type { ActivePage } from '@/types/utils';
 
 interface AppHeaderProps {
   activePage: ActivePage;
