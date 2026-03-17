@@ -36,6 +36,7 @@ const POST_TYPE_OPTIONS: Record<Platform, { value: PostType; label: string }[]> 
   ],
   x:       [{ value: 'x_post',       label: 'Post' }],
   threads: [{ value: 'threads_post', label: 'Post' }],
+  fanvue:  [{ value: 'fanvue_post',  label: 'Post' }],
 };
 
 function ModelFormModal({

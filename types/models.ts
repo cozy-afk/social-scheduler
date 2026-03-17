@@ -1,6 +1,21 @@
-export type UserRole = 'admin' | 'va';
+export type UserRole = 'admin' | 'agency' | 'planner' | 'va';
 
-export type Platform = 'instagram' | 'tiktok' | 'x' | 'threads';
+// ─── Agency ─────────────────────────────────────────────────────────
+
+export interface AgencyFeatureAccess {
+  captions: boolean;    // Access to caption library
+  analytics: boolean;   // Access to analytics dashboard
+}
+
+export interface Agency {
+  id: string;
+  name: string;
+  featureAccess: AgencyFeatureAccess;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type Platform = 'instagram' | 'tiktok' | 'x' | 'threads' | 'fanvue';
 
 export type PostType =
   | 'instagram_post'
@@ -10,7 +25,8 @@ export type PostType =
   | 'tiktok_slideshow'
   | 'tiktok_story'
   | 'x_post'
-  | 'threads_post';
+  | 'threads_post'
+  | 'fanvue_post';
 
 export type PostStatus = 'draft' | 'scheduled' | 'completed' | 'missing';
 
@@ -39,10 +55,19 @@ export interface MetaConnection {
   pageId?: string;
 }
 
+export interface FanvueConnection {
+  accessToken?: string;
+  connectedAt?: string;
+  userHandle?: string;
+}
+
 export interface Model {
   id: string;
   name: string;
   profileImage?: string;
+  agencyId: string;             // Links to owning agency (required)
+  fanvueAccountId: string;      // Fanvue account ID (required)
+  s3Folder: string;             // S3 folder path: "agency-name/model-name/"
   exifPreset: {
     device: string;
     model: string;
@@ -59,6 +84,7 @@ export interface Model {
   status: 'active' | 'paused';
   createdAt: string;
   metaConnection?: MetaConnection;
+  fanvueConnection?: FanvueConnection;
 }
 
 export interface TimeSlot {
@@ -74,7 +100,11 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
-  assignedModels: string[];
+  agencyId?: string;        // For agency/planner users - links to their agency
+  assignedModels: string[]; // For VAs - which models they can access
+  discordId?: string;       // Discord user ID for auth
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Asset {
@@ -129,6 +159,7 @@ export interface Caption {
   tags: string[];
   modelId?: string;
   createdAt: string;
+  sourceUrl?: string;
 }
 
 export interface GalleryAsset {
@@ -144,6 +175,54 @@ export interface GalleryAsset {
   uploadedAt: string;
   source: 's3' | 'local';
   s3Key?: string;
+  favorite?: boolean;
+}
+
+// ─── Post References ─────────────────────────────────────────────────────────
+
+export type PostReferencePlatform = 'instagram' | 'tiktok' | 'threads' | 'x' | 'unknown';
+
+export interface PostReference {
+  id: string;
+  coverImageUrl: string | null;
+  caption: string;
+  description: string;
+  sourceUrl?: string;
+  sourcePlatform: PostReferencePlatform;
+  createdAt: string;
+  modelId?: string;
+  tags: string[];
+  category: CaptionCategory;
+  performanceRating?: 'high' | 'medium' | 'low';
+}
+
+// ─── Staging Workflow ─────────────────────────────────────────────────────────
+
+export type CropRatio = '1:1' | '4:5' | '9:16';
+export type WorkflowStep = 'gallery' | 'staging' | 'editing' | 'scheduling';
+
+export interface StagedVariantEditResult {
+  url: string;
+  namedFilter: string;
+  filters: Record<string, number>;
+  overlays: unknown[];
+}
+
+export interface StagedVariant {
+  ratio: CropRatio;
+  edited: boolean;
+  editResult?: StagedVariantEditResult;
+}
+
+export interface StagedAsset {
+  asset: GalleryAsset;
+  variants: StagedVariant[];
+  skipped: boolean;
+}
+
+export interface EditingTarget {
+  assetId: string;
+  ratio: CropRatio;
 }
 
 export interface VAMagicLink {

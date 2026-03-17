@@ -1,10 +1,46 @@
 import { create } from 'zustand';
-import { Model, User, Post, Caption, GalleryAsset, VAMagicLink } from '@/types/models';
+import {
+  Model, User, Post, Caption, GalleryAsset, VAMagicLink,
+  PostReference, StagedAsset, StagedVariant, WorkflowStep, EditingTarget, CropRatio,
+  Agency,
+} from '@/types/models';
+
+export interface S3Config {
+  bucket: string;
+  region: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+}
+
+export interface MetaConfig {
+  accountId: string;
+  accessToken: string;
+  igUserId: string;
+}
+
+export interface FanvueConfig {
+  accessToken: string;
+  userHandle?: string;
+}
 
 interface AppState {
   // Current user
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
+
+  // Agencies
+  agencies: Agency[];
+  setAgencies: (agencies: Agency[]) => void;
+  addAgency: (agency: Agency) => void;
+  updateAgency: (id: string, updates: Partial<Agency>) => void;
+  deleteAgency: (id: string) => void;
+
+  // All users (for admin management)
+  users: User[];
+  setUsers: (users: User[]) => void;
+  addUser: (user: User) => void;
+  updateUser: (id: string, updates: Partial<User>) => void;
+  deleteUser: (id: string) => void;
 
   // Models
   models: Model[];
@@ -20,6 +56,7 @@ interface AppState {
   setVAUsers: (users: User[]) => void;
   addVAUser: (user: User) => void;
   updateVAUser: (id: string, updates: Partial<User>) => void;
+  deleteVAUser: (id: string) => void;
 
   // Posts
   posts: Post[];
@@ -44,6 +81,34 @@ interface AppState {
   addMagicLink: (link: VAMagicLink) => void;
   revokeMagicLink: (token: string) => void;
 
+  // Integration configs (persisted in memory; real app would use DB)
+  s3Config: S3Config | null;
+  setS3Config: (config: S3Config | null) => void;
+  metaConfig: MetaConfig | null;
+  setMetaConfig: (config: MetaConfig | null) => void;
+  fanvueConfig: FanvueConfig | null;
+  setFanvueConfig: (config: FanvueConfig | null) => void;
+
+  // Post References (replaces captions-as-text for reference posts)
+  postReferences: PostReference[];
+  setPostReferences: (refs: PostReference[]) => void;
+  addPostReference: (ref: PostReference) => void;
+  deletePostReference: (id: string) => void;
+
+  // Gallery favorites
+  toggleGalleryFavorite: (id: string) => void;
+
+  // Staging workflow
+  workflowStep: WorkflowStep;
+  setWorkflowStep: (step: WorkflowStep) => void;
+  stagedAssets: StagedAsset[];
+  setStagedAssets: (assets: GalleryAsset[]) => void;
+  updateStagedVariant: (assetId: string, ratio: CropRatio, result: StagedVariant['editResult']) => void;
+  skipStagedAsset: (assetId: string) => void;
+  clearStaging: () => void;
+  editingTarget: EditingTarget | null;
+  setEditingTarget: (target: EditingTarget | null) => void;
+
   // UI state
   showCreatePostModal: boolean;
   setShowCreatePostModal: (show: boolean) => void;
@@ -57,6 +122,28 @@ export const useStore = create<AppState>((set) => ({
   // Current user
   currentUser: null,
   setCurrentUser: (user) => set({ currentUser: user }),
+
+  // Agencies
+  agencies: [],
+  setAgencies: (agencies) => set({ agencies }),
+  addAgency: (agency) => set((state) => ({ agencies: [...state.agencies, agency] })),
+  updateAgency: (id, updates) =>
+    set((state) => ({
+      agencies: state.agencies.map((a) => (a.id === id ? { ...a, ...updates } : a)),
+    })),
+  deleteAgency: (id) =>
+    set((state) => ({ agencies: state.agencies.filter((a) => a.id !== id) })),
+
+  // All users (for admin management)
+  users: [],
+  setUsers: (users) => set({ users }),
+  addUser: (user) => set((state) => ({ users: [...state.users, user] })),
+  updateUser: (id, updates) =>
+    set((state) => ({
+      users: state.users.map((u) => (u.id === id ? { ...u, ...updates } : u)),
+    })),
+  deleteUser: (id) =>
+    set((state) => ({ users: state.users.filter((u) => u.id !== id) })),
 
   // Models
   models: [],
@@ -82,6 +169,8 @@ export const useStore = create<AppState>((set) => ({
     set((state) => ({
       vaUsers: state.vaUsers.map((u) => (u.id === id ? { ...u, ...updates } : u)),
     })),
+  deleteVAUser: (id) =>
+    set((state) => ({ vaUsers: state.vaUsers.filter((u) => u.id !== id) })),
 
   // Posts
   posts: [],
@@ -114,6 +203,68 @@ export const useStore = create<AppState>((set) => ({
         l.token === token ? { ...l, isActive: false } : l
       ),
     })),
+
+  // Integration configs
+  s3Config: null,
+  setS3Config: (config) => set({ s3Config: config }),
+  metaConfig: null,
+  setMetaConfig: (config) => set({ metaConfig: config }),
+  fanvueConfig: null,
+  setFanvueConfig: (config) => set({ fanvueConfig: config }),
+
+  // Post References
+  postReferences: [],
+  setPostReferences: (refs) => set({ postReferences: refs }),
+  addPostReference: (ref) => set((state) => ({ postReferences: [ref, ...state.postReferences] })),
+  deletePostReference: (id) => set((state) => ({ postReferences: state.postReferences.filter((r) => r.id !== id) })),
+
+  // Gallery favorites
+  toggleGalleryFavorite: (id) =>
+    set((state) => ({
+      galleryAssets: state.galleryAssets.map((a) =>
+        a.id === id ? { ...a, favorite: !a.favorite } : a
+      ),
+    })),
+
+  // Staging workflow
+  workflowStep: 'gallery',
+  setWorkflowStep: (step) => set({ workflowStep: step }),
+  stagedAssets: [],
+  setStagedAssets: (assets) =>
+    set({
+      stagedAssets: assets.map((asset) => ({
+        asset,
+        variants: [
+          { ratio: '1:1' as CropRatio,  edited: false },
+          { ratio: '4:5' as CropRatio,  edited: false },
+          { ratio: '9:16' as CropRatio, edited: false },
+        ],
+        skipped: false,
+      })),
+      workflowStep: 'staging',
+    }),
+  updateStagedVariant: (assetId, ratio, result) =>
+    set((state) => ({
+      stagedAssets: state.stagedAssets.map((sa) =>
+        sa.asset.id === assetId
+          ? {
+              ...sa,
+              variants: sa.variants.map((v) =>
+                v.ratio === ratio ? { ...v, edited: true, editResult: result } : v
+              ),
+            }
+          : sa
+      ),
+    })),
+  skipStagedAsset: (assetId) =>
+    set((state) => ({
+      stagedAssets: state.stagedAssets.map((sa) =>
+        sa.asset.id === assetId ? { ...sa, skipped: true } : sa
+      ),
+    })),
+  clearStaging: () => set({ stagedAssets: [], workflowStep: 'gallery', editingTarget: null }),
+  editingTarget: null,
+  setEditingTarget: (target) => set({ editingTarget: target }),
 
   // UI
   showCreatePostModal: false,

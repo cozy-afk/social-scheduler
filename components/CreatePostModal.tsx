@@ -66,6 +66,12 @@ const PLATFORM_STYLE: Record<Platform, { label: string; icon: string; section: s
     header:  'bg-slate-700/40 border-b border-slate-600/30 text-slate-300',
     badge:   'bg-slate-700/30 border-slate-600/40 text-slate-300',
   },
+  fanvue: {
+    label: 'Fanvue', icon: '🎭',
+    section: 'border border-orange-500/25 bg-orange-500/5',
+    header:  'bg-orange-500/15 border-b border-orange-500/25 text-orange-300',
+    badge:   'bg-orange-500/15 border-orange-500/30 text-orange-300',
+  },
 };
 
 const FORMAT_TO_IG_POST_TYPE: Record<PostFormat, PostType> = {

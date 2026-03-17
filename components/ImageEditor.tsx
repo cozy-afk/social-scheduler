@@ -4,17 +4,22 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   X, Check, Sun, Crop, Type, Smile, Wand2, Trash2,
   Bold, AlignCenter, ChevronLeft, ChevronRight, RotateCcw,
-  Minus, Plus,
+  Minus, Plus, Sparkles,
 } from 'lucide-react';
+import { INSTAGRAM_FILTERS } from '@/lib/instagram-filters';
+import type { CropRatio } from '@/types/models';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface FilterState {
+  namedFilter: string;   // filter name from INSTAGRAM_FILTERS, '' = Normal
   brightness: number;   // 50–150 (100 = normal)
   contrast: number;     // 50–150
   saturation: number;   // 0–200
   warmth: number;       // -50 to 50 (sepia-ish warm shift)
   vignette: number;     // 0–100
+  fade: number;         // 0–100, adds white overlay (desaturation+lift effect)
+  sharpen: number;      // 0–100, maps to extra contrast
 }
 
 export interface OverlayItem {
@@ -44,14 +49,23 @@ export interface ImageEditorResult {
   overlays: OverlayItem[];
 }
 
-type EditorTool = 'crop' | 'enhance' | 'text' | 'emoji';
-type CropRatio = 'free' | '1:1' | '4:5' | '9:16' | '16:9';
+type EditorTool = 'filters' | 'crop' | 'enhance' | 'text' | 'emoji';
+type LocalCropRatio = 'free' | '1:1' | '4:5' | '9:16' | '16:9';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DEFAULT_FILTERS: FilterState = { brightness: 100, contrast: 100, saturation: 100, warmth: 0, vignette: 0 };
+const DEFAULT_FILTERS: FilterState = {
+  namedFilter: '',
+  brightness: 100,
+  contrast: 100,
+  saturation: 100,
+  warmth: 0,
+  vignette: 0,
+  fade: 0,
+  sharpen: 0,
+};
 
-const CROP_RATIOS: { label: string; value: CropRatio; ratio?: number }[] = [
+const CROP_RATIOS: { label: string; value: LocalCropRatio; ratio?: number }[] = [
   { label: 'Free', value: 'free' },
   { label: '1:1', value: '1:1', ratio: 1 },
   { label: '4:5', value: '4:5', ratio: 0.8 },
@@ -83,8 +97,16 @@ const EMOJIS: Record<string, string[]> = {
 // ─── Filter CSS string ────────────────────────────────────────────────────────
 
 function filtersToCSS(f: FilterState): string {
-  const warm = f.warmth > 0 ? `sepia(${f.warmth * 0.5}%)` : f.warmth < 0 ? `hue-rotate(${f.warmth * 1.5}deg)` : '';
-  return `brightness(${f.brightness}%) contrast(${f.contrast}%) saturate(${f.saturation}%) ${warm}`.trim();
+  const named = INSTAGRAM_FILTERS.find((x) => x.name === f.namedFilter)?.css || '';
+  const sharpenExtra = f.sharpen > 0 ? ` contrast(${1 + f.sharpen * 0.005})` : '';
+  const manual = [
+    `brightness(${f.brightness / 100})`,
+    `contrast(${f.contrast / 100})`,
+    `saturate(${f.saturation / 100})`,
+    f.warmth !== 0 ? `hue-rotate(${f.warmth * 0.5}deg)` : '',
+    sharpenExtra,
+  ].filter(Boolean).join(' ');
+  return [named, manual].filter(Boolean).join(' ');
 }
 
 // ─── Slider row component ─────────────────────────────────────────────────────
@@ -117,12 +139,14 @@ interface ImageEditorProps {
   initialOverlays?: OverlayItem[];
   onDone: (result: ImageEditorResult) => void;
   onCancel: () => void;
+  lockedRatio?: CropRatio;
 }
 
-export default function ImageEditor({ item, initialFilters, initialOverlays, onDone, onCancel }: ImageEditorProps) {
+export default function ImageEditor({ item, initialFilters, initialOverlays, onDone, onCancel, lockedRatio }: ImageEditorProps) {
   const [tool, setTool] = useState<EditorTool>('enhance');
   const [filters, setFilters] = useState<FilterState>(initialFilters || DEFAULT_FILTERS);
-  const [cropRatio, setCropRatio] = useState<CropRatio>('free');
+  const [namedFilter, setNamedFilter] = useState(initialFilters?.namedFilter || '');
+  const [cropRatio, setCropRatio] = useState<LocalCropRatio>('free');
   const [overlays, setOverlays] = useState<OverlayItem[]>(initialOverlays || []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [emojiCategory, setEmojiCategory] = useState<string>('🔥 Hot');
@@ -215,16 +239,19 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
   };
 
   const autoEnhance = () => {
-    setFilters({ brightness: 108, contrast: 110, saturation: 115, warmth: 8, vignette: 20 });
+    setFilters({ ...filters, brightness: 108, contrast: 110, saturation: 115, warmth: 8, vignette: 20 });
   };
 
-  const resetFilters = () => setFilters(DEFAULT_FILTERS);
+  const resetFilters = () => {
+    setFilters(DEFAULT_FILTERS);
+    setNamedFilter('');
+  };
 
   // ─ Apply to canvas & done ────────────────────────────────────────────────
 
   const handleDone = useCallback(async () => {
     if (item.type === 'video') {
-      onDone({ url: item.url, filters, overlays });
+      onDone({ url: item.url, filters: { ...filters, namedFilter }, overlays });
       return;
     }
     setApplying(true);
@@ -256,9 +283,17 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
       canvas.height = sh;
       const ctx = canvas.getContext('2d')!;
 
-      // Apply image + CSS filters
-      ctx.filter = filtersToCSS(filters);
+      // Apply image + CSS filters (named + manual adjustments)
+      const fullFilter = filtersToCSS({ ...filters, namedFilter });
+      ctx.filter = fullFilter || 'none';
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+      // Fade overlay (white semi-transparent layer)
+      if (filters.fade > 0) {
+        ctx.filter = 'none';
+        ctx.fillStyle = `rgba(255,255,255,${filters.fade / 200})`;
+        ctx.fillRect(0, 0, sw, sh);
+      }
 
       // Vignette
       if (filters.vignette > 0) {
@@ -294,25 +329,27 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
       });
 
       const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      onDone({ url: dataUrl, filters, overlays });
+      onDone({ url: dataUrl, filters: { ...filters, namedFilter }, overlays });
     } catch {
       // fallback: return original with metadata
-      onDone({ url: item.url, filters, overlays });
+      onDone({ url: item.url, filters: { ...filters, namedFilter }, overlays });
     } finally {
       setApplying(false);
     }
-  }, [item, filters, overlays, cropRatio, onDone]);
+  }, [item, filters, namedFilter, overlays, cropRatio, onDone]);
 
   // ─ Crop overlay helper ───────────────────────────────────────────────────
 
   const getCropStyle = (): React.CSSProperties => {
     const ratioObj = CROP_RATIOS.find((r) => r.value === cropRatio);
     if (!ratioObj?.ratio) return {};
-    const containerAspect = 1; // image container is square-ish; use the image's actual display ratio
     return { aspectRatio: `${ratioObj.value.replace(':', '/')}` };
   };
 
   const selectedOverlay = overlays.find((o) => o.id === selectedId);
+
+  // The live CSS filter string applied to the preview image (named filter + manual adjustments)
+  const previewFilterCSS = filtersToCSS({ ...filters, namedFilter });
 
   return (
     <div className="fixed inset-0 bg-black z-[70] flex flex-col" style={{ touchAction: isDragging ? 'none' : 'auto' }}>
@@ -346,13 +383,21 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
               src={item.url}
               alt=""
               className="w-full h-full object-cover rounded-2xl"
-              style={{ filter: filtersToCSS(filters), userSelect: 'none', pointerEvents: 'none' }}
+              style={{ filter: previewFilterCSS || 'none', userSelect: 'none', pointerEvents: 'none' }}
               draggable={false}
             />
           ) : (
             <div className="w-full h-full bg-slate-900 rounded-2xl flex items-center justify-center">
               <p className="text-slate-400 text-sm">Video preview not available</p>
             </div>
+          )}
+
+          {/* Fade overlay */}
+          {filters.fade > 0 && (
+            <div
+              className="absolute inset-0 rounded-2xl pointer-events-none"
+              style={{ backgroundColor: `rgba(255,255,255,${filters.fade / 200})` }}
+            />
           )}
 
           {/* Vignette overlay */}
@@ -456,6 +501,40 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
 
       {/* Tool panel */}
       <div className="bg-slate-950 border-t border-slate-800 flex-shrink-0 max-h-[40vh] overflow-y-auto">
+        {/* Filters */}
+        {tool === 'filters' && (
+          <div className="px-5 py-4 space-y-3">
+            <p className="text-xs text-slate-400 font-medium">Instagram Filters</p>
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+              {INSTAGRAM_FILTERS.map((f) => (
+                <button
+                  key={f.name}
+                  onClick={() => setNamedFilter(f.name === 'Normal' ? '' : f.name)}
+                  className={`flex flex-col items-center gap-1 flex-shrink-0 group`}
+                >
+                  <div className={`w-14 h-14 rounded-xl overflow-hidden ring-2 transition-all ${
+                    (f.name === 'Normal' ? namedFilter === '' : namedFilter === f.name)
+                      ? 'ring-blue-500'
+                      : 'ring-transparent group-hover:ring-slate-500'
+                  }`}>
+                    <img
+                      src={item.url}
+                      alt={f.name}
+                      className="w-full h-full object-cover"
+                      style={{ filter: f.css || 'none' }}
+                    />
+                  </div>
+                  <span className={`text-[10px] whitespace-nowrap ${
+                    (f.name === 'Normal' ? namedFilter === '' : namedFilter === f.name)
+                      ? 'text-blue-400 font-semibold'
+                      : 'text-slate-500'
+                  }`}>{f.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Enhance */}
         {tool === 'enhance' && (
           <div className="px-5 py-4 space-y-4">
@@ -475,6 +554,8 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
             <SliderRow label="Saturation" value={filters.saturation} min={0} max={200} onChange={(v) => setFilters((f) => ({ ...f, saturation: v }))} />
             <SliderRow label="Warmth" value={filters.warmth} min={-50} max={50} onChange={(v) => setFilters((f) => ({ ...f, warmth: v }))} unit="+" />
             <SliderRow label="Vignette" value={filters.vignette} min={0} max={100} onChange={(v) => setFilters((f) => ({ ...f, vignette: v }))} unit="%" />
+            <SliderRow label="Fade" value={filters.fade} min={0} max={100} onChange={(v) => setFilters((f) => ({ ...f, fade: v }))} />
+            <SliderRow label="Sharpen" value={filters.sharpen} min={0} max={100} onChange={(v) => setFilters((f) => ({ ...f, sharpen: v }))} />
           </div>
         )}
 
@@ -483,23 +564,29 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
           <div className="px-5 py-4">
             <p className="text-xs text-slate-400 mb-3">Select aspect ratio. Changes apply when you tap <strong className="text-white">Done</strong>.</p>
             <div className="flex flex-wrap gap-2">
-              {CROP_RATIOS.map((r) => (
-                <button
-                  key={r.value}
-                  onClick={() => setCropRatio(r.value)}
-                  className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
-                    cropRatio === r.value
-                      ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
+              {CROP_RATIOS.map((r) => {
+                const isLocked = lockedRatio !== undefined && r.value !== lockedRatio && r.value !== 'free';
+                return (
+                  <button
+                    key={r.value}
+                    onClick={() => !isLocked && setCropRatio(r.value)}
+                    className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                      cropRatio === r.value
+                        ? 'bg-blue-600 border-blue-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'
+                    } ${isLocked ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                  >
+                    {r.label}
+                  </button>
+                );
+              })}
             </div>
+            {lockedRatio && (
+              <p className="text-[10px] text-slate-500 mt-1">Ratio locked from staging</p>
+            )}
             {cropRatio !== 'free' && (
               <p className="text-xs text-blue-400 mt-3">
-                📐 {cropRatio} crop will be applied to the center of the image.
+                {cropRatio} crop will be applied to the center of the image.
               </p>
             )}
           </div>
@@ -607,15 +694,16 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
       {/* Bottom toolbar */}
       <div className="bg-slate-950 border-t border-slate-800 px-4 py-3 flex items-center justify-around flex-shrink-0">
         {([
-          { id: 'crop',    icon: <Crop className="w-5 h-5" />,   label: 'Crop' },
-          { id: 'enhance', icon: <Sun className="w-5 h-5" />,    label: 'Enhance' },
-          { id: 'text',    icon: <Type className="w-5 h-5" />,   label: 'Text' },
-          { id: 'emoji',   icon: <Smile className="w-5 h-5" />,  label: 'Emoji' },
+          { id: 'filters', icon: <Sparkles className="w-5 h-5" />, label: 'Filters' },
+          { id: 'crop',    icon: <Crop className="w-5 h-5" />,     label: 'Crop' },
+          { id: 'enhance', icon: <Sun className="w-5 h-5" />,      label: 'Enhance' },
+          { id: 'text',    icon: <Type className="w-5 h-5" />,     label: 'Text' },
+          { id: 'emoji',   icon: <Smile className="w-5 h-5" />,    label: 'Emoji' },
         ] as const).map(({ id, icon, label }) => (
           <button
             key={id}
             onClick={() => setTool(id)}
-            className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${
+            className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${
               tool === id
                 ? 'text-blue-400 bg-blue-600/15'
                 : 'text-slate-500 hover:text-slate-300'

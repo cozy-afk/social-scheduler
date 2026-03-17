@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useStore } from '@/lib/store';
+import type { MetaConfig } from '@/lib/store';
 import { mockModels, mockAdmin } from '@/lib/mockData';
 import AppHeader from '@/components/AppHeader';
 import {
   BarChart2, TrendingUp, Users, Heart, MessageCircle,
   Search, Plus, X, Loader2, AlertCircle, ExternalLink,
-  RefreshCw, ChevronDown, Instagram, Zap,
+  RefreshCw, ChevronDown, Instagram, Zap, Check,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -163,10 +165,10 @@ function TrendPostCard({ post, rank }: { post: TrendPost; rank: number }) {
 // ─── Model Analytics Tab ─────────────────────────────────────────────────────
 
 function ModelAnalyticsTab() {
-  const { models } = useStore();
+  const { models, metaConfig } = useStore();
   const [selectedModelId, setSelectedModelId] = useState(models[0]?.id || '');
-  const [accountId, setAccountId] = useState('');
-  const [accessToken, setAccessToken] = useState('');
+  const [accountId, setAccountId] = useState(metaConfig?.accountId || '');
+  const [accessToken, setAccessToken] = useState(metaConfig?.accessToken || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [data, setData] = useState<{ profile: IGProfile; media: { data: IGMedia[] } } | null>(null);
@@ -202,6 +204,12 @@ function ModelAnalyticsTab() {
     <div className="space-y-5">
       {/* Model selector + connection */}
       <div className="card p-5 space-y-4">
+        {metaConfig && !data && (
+          <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
+            <Check className="w-3.5 h-3.5" />
+            Credentials loaded from Settings — click Fetch Insights to load data.
+          </div>
+        )}
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-gradient-to-br from-pink-500 to-purple-600 rounded-xl flex items-center justify-center text-lg">
             {selectedModel?.profileImage || '👤'}
@@ -243,6 +251,13 @@ function ModelAnalyticsTab() {
             />
           </div>
         </div>
+
+        <p className="text-xs text-slate-500">
+          Credentials are managed in{' '}
+          <Link href="/settings?tab=integrations" className="text-blue-400 hover:underline">
+            Settings → Integrations
+          </Link>
+        </p>
 
         <div className="flex items-center gap-2">
           <button
@@ -359,12 +374,13 @@ function ModelAnalyticsTab() {
 // ─── Niche Trends Tab ────────────────────────────────────────────────────────
 
 function NicheTrendsTab() {
+  const { metaConfig } = useStore();
   const [hashtags, setHashtags] = useState<string[]>(['fitness', 'lifestyle']);
   const [handles, setHandles] = useState<string[]>([]);
   const [hashtagInput, setHashtagInput] = useState('');
   const [handleInput, setHandleInput] = useState('');
-  const [accessToken, setAccessToken] = useState('');
-  const [igUserId, setIgUserId] = useState('');
+  const [accessToken, setAccessToken] = useState(metaConfig?.accessToken || '');
+  const [igUserId, setIgUserId] = useState(metaConfig?.igUserId || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [results, setResults] = useState<TrendPost[]>([]);
@@ -425,27 +441,35 @@ function NicheTrendsTab() {
         </div>
 
         {showConfig && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-700/60">
-            <div>
-              <label className="label-dark">Access Token</label>
-              <input
-                type="password"
-                value={accessToken}
-                onChange={(e) => setAccessToken(e.target.value)}
-                placeholder="EAAxxxxx..."
-                className="input-dark"
-              />
+          <div className="pt-1 border-t border-slate-700/60 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="label-dark">Access Token</label>
+                <input
+                  type="password"
+                  value={accessToken}
+                  onChange={(e) => setAccessToken(e.target.value)}
+                  placeholder="EAAxxxxx..."
+                  className="input-dark"
+                />
+              </div>
+              <div>
+                <label className="label-dark">Instagram User ID</label>
+                <input
+                  type="text"
+                  value={igUserId}
+                  onChange={(e) => setIgUserId(e.target.value)}
+                  placeholder="17841400008460056"
+                  className="input-dark"
+                />
+              </div>
             </div>
-            <div>
-              <label className="label-dark">Instagram User ID</label>
-              <input
-                type="text"
-                value={igUserId}
-                onChange={(e) => setIgUserId(e.target.value)}
-                placeholder="17841400008460056"
-                className="input-dark"
-              />
-            </div>
+            <p className="text-xs text-slate-500">
+              Credentials are managed in{' '}
+              <Link href="/settings?tab=integrations" className="text-blue-400 hover:underline">
+                Settings → Integrations
+              </Link>
+            </p>
           </div>
         )}
 

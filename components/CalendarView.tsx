@@ -20,6 +20,7 @@ const PLATFORM_COLORS: Record<Platform, string> = {
   tiktok:    'bg-red-500',
   x:         'bg-slate-400',
   threads:   'bg-purple-500',
+  fanvue:    'bg-orange-500',
 };
 
 const PLATFORM_RING: Record<Platform, string> = {
@@ -27,6 +28,7 @@ const PLATFORM_RING: Record<Platform, string> = {
   tiktok:    'ring-red-500/60',
   x:         'ring-slate-400/60',
   threads:   'ring-purple-500/60',
+  fanvue:    'ring-orange-500/60',
 };
 
 const PLATFORM_BORDER_L: Record<Platform, string> = {
@@ -34,6 +36,7 @@ const PLATFORM_BORDER_L: Record<Platform, string> = {
   tiktok:    'border-l-red-500',
   x:         'border-l-slate-400',
   threads:   'border-l-purple-500',
+  fanvue:    'border-l-orange-500',
 };
 
 const PLATFORM_DIM_BG: Record<Platform, string> = {
@@ -41,6 +44,7 @@ const PLATFORM_DIM_BG: Record<Platform, string> = {
   tiktok:    'bg-red-500/15',
   x:         'bg-slate-500/15',
   threads:   'bg-purple-500/15',
+  fanvue:    'bg-orange-500/15',
 };
 
 const PLATFORM_ICON: Record<Platform, string> = {
@@ -48,6 +52,7 @@ const PLATFORM_ICON: Record<Platform, string> = {
   tiktok:    '🎵',
   x:         '𝕏',
   threads:   '🧵',
+  fanvue:    '🎭',
 };
 
 const POST_TYPE_SHORT: Record<PostType, string> = {
@@ -59,6 +64,7 @@ const POST_TYPE_SHORT: Record<PostType, string> = {
   tiktok_story:      'TT Story',
   x_post:            'X',
   threads_post:      'Threads',
+  fanvue_post:       'Fanvue',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

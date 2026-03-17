@@ -1,16 +1,21 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useStore } from '@/lib/store';
 import { mockModels, mockAdmin, mockGalleryAssets } from '@/lib/mockData';
 import AppHeader from '@/components/AppHeader';
 import CreatePostModal from '@/components/CreatePostModal';
-import { GalleryAsset } from '@/types/models';
+import StagingView from '@/components/StagingView';
+import ImageEditor, { EditableImage, ImageEditorResult } from '@/components/ImageEditor';
+import BatchScheduler from '@/components/BatchScheduler';
+import AutoPublisher from '@/components/AutoPublisher';
+import { GalleryAsset, CropRatio } from '@/types/models';
 import {
-  Upload, Check, X, Film, Image as ImageIcon, Calendar,
-  HardDrive, Cloud, ChevronDown, Search, Zap, FolderOpen,
+  Upload, Check, X, Film, Image as ImageIcon,
+  HardDrive, Search, FolderOpen,
   Eye, Loader2, RefreshCw, Heart, MessageCircle, Bookmark,
-  Send, MoreHorizontal, Play, Music2,
+  Send, MoreHorizontal, Play, Music2, Layers,
+  Grid3X3, List, Rows3,
 } from 'lucide-react';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -67,6 +72,8 @@ function AssetThumbnail({
       <div className="w-full h-full bg-slate-800 flex items-center justify-center">
         {asset.fileType === 'video' ? (
           <Film className="w-8 h-8 text-slate-600" />
+        ) : asset.fileUrl ? (
+          <img src={asset.fileUrl} alt={asset.fileName} className="w-full h-full object-cover" />
         ) : (
           <ImageIcon className="w-8 h-8 text-slate-600" />
         )}
@@ -516,15 +523,16 @@ export default function GalleryPage() {
     setModels, setSelectedModelId, setCurrentUser,
     galleryAssets, setGalleryAssets, addGalleryAsset,
     setShowCreatePostModal, setPreloadedGalleryAssets, showCreatePostModal,
+    setStagedAssets, workflowStep, editingTarget, setEditingTarget,
+    updateStagedVariant, setWorkflowStep, stagedAssets,
   } = useStore();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<'all' | 'image' | 'video'>('all');
   const [search, setSearch] = useState('');
-  const [showS3Config, setShowS3Config] = useState(false);
-  const [s3Bucket, setS3Bucket] = useState('');
-  const [s3Region, setS3Region] = useState('us-east-1');
   const [showFeedPreview, setShowFeedPreview] = useState(false);
+  const [thumbSize, setThumbSize] = useState(3);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -562,17 +570,49 @@ export default function GalleryPage() {
   const selectAll = () => setSelectedIds(new Set(filtered.map((a) => a.id)));
   const clearSelection = () => setSelectedIds(new Set());
 
-  const handleScheduleSelected = () => {
+  const handleStageSelected = () => {
     const selected = galleryAssets.filter((a) => selectedIds.has(a.id));
-    setPreloadedGalleryAssets(selected);
-    setShowCreatePostModal(true);
+    setStagedAssets(selected);
     clearSelection();
   };
+
+  const handleEditVariant = useCallback((assetId: string, ratio: CropRatio) => {
+    setEditingTarget({ assetId, ratio });
+    setWorkflowStep('editing');
+  }, [setEditingTarget, setWorkflowStep]);
+
+  const handleEditorDone = useCallback((result: ImageEditorResult) => {
+    if (!editingTarget) return;
+    updateStagedVariant(editingTarget.assetId, editingTarget.ratio, {
+      url: result.url,
+      namedFilter: result.filters.namedFilter,
+      filters: result.filters as unknown as Record<string, number>,
+      overlays: result.overlays,
+    });
+    setEditingTarget(null);
+    setWorkflowStep('staging');
+  }, [editingTarget, updateStagedVariant, setEditingTarget, setWorkflowStep]);
+
+  const handleEditorCancel = useCallback(() => {
+    setEditingTarget(null);
+    setWorkflowStep('staging');
+  }, [setEditingTarget, setWorkflowStep]);
 
   const filtered = galleryAssets.filter((a) => {
     if (filter === 'image' && a.fileType !== 'image') return false;
     if (filter === 'video' && a.fileType !== 'video') return false;
-    if (search && !a.fileName.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search) {
+      const term = search.toLowerCase();
+      const dateStr = a.uploadedAt
+        ? new Date(a.uploadedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).toLowerCase()
+        : '';
+      const matches =
+        a.fileName.toLowerCase().includes(term) ||
+        a.fileType.toLowerCase().includes(term) ||
+        formatRatio(a.aspectRatio).toLowerCase().includes(term) ||
+        dateStr.includes(term);
+      if (!matches) return false;
+    }
     return true;
   });
 
@@ -587,6 +627,7 @@ export default function GalleryPage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
+      <AutoPublisher />
       <AppHeader activePage="gallery" />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className={`flex gap-6 ${showFeedPreview ? 'lg:flex-row flex-col' : 'flex-col'}`}>
@@ -614,14 +655,6 @@ export default function GalleryPage() {
                   Feed Preview
                 </button>
                 <button
-                  onClick={() => setShowS3Config(!showS3Config)}
-                  className="btn-secondary flex items-center gap-2 text-sm"
-                >
-                  <Cloud className="w-4 h-4" />
-                  S3 Bucket
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showS3Config ? 'rotate-180' : ''}`} />
-                </button>
-                <button
                   onClick={() => fileInputRef.current?.click()}
                   className="btn-secondary flex items-center gap-2 text-sm"
                 >
@@ -629,44 +662,25 @@ export default function GalleryPage() {
                   Upload
                 </button>
                 <input ref={fileInputRef} type="file" multiple accept="image/*,video/*" onChange={handleLocalUpload} className="hidden" />
+                {/* View mode toggle */}
+                <div className="flex items-center gap-0.5 bg-slate-800 border border-slate-700 rounded-lg p-1">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    title="Grid view"
+                  >
+                    <Grid3X3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    title="List view"
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
-
-            {/* S3 Config panel */}
-            {showS3Config && (
-              <div className="card p-5 space-y-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Cloud className="w-5 h-5 text-blue-400" />
-                  <h3 className="font-semibold text-white">S3 Bucket Configuration</h3>
-                  <span className="text-xs bg-amber-500/20 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-full">Not connected</span>
-                </div>
-                <p className="text-xs text-slate-400">Connect your S3 bucket to browse and import content directly into the scheduler.</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="label-dark">Bucket Name</label>
-                    <input type="text" value={s3Bucket} onChange={(e) => setS3Bucket(e.target.value)} placeholder="my-content-bucket" className="input-dark" />
-                  </div>
-                  <div>
-                    <label className="label-dark">Region</label>
-                    <input type="text" value={s3Region} onChange={(e) => setS3Region(e.target.value)} placeholder="us-east-1" className="input-dark" />
-                  </div>
-                  <div>
-                    <label className="label-dark">Access Key ID</label>
-                    <input type="password" placeholder="AKIA..." className="input-dark" />
-                  </div>
-                  <div>
-                    <label className="label-dark">Secret Access Key</label>
-                    <input type="password" placeholder="••••••••••••••••" className="input-dark" />
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button className="btn-primary text-sm flex items-center gap-2">
-                    <Zap className="w-4 h-4" /> Connect Bucket
-                  </button>
-                  <button onClick={() => setShowS3Config(false)} className="btn-ghost text-sm">Cancel</button>
-                </div>
-              </div>
-            )}
 
             {/* Stats row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -691,7 +705,7 @@ export default function GalleryPage() {
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by filename…"
+                  placeholder="Search by name, type, ratio…"
                   className="input-dark pl-9"
                 />
               </div>
@@ -712,27 +726,49 @@ export default function GalleryPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-slate-300">{selectedIds.size} selected</span>
                   <button onClick={clearSelection} className="btn-ghost text-sm p-1.5"><X className="w-4 h-4" /></button>
-                  <button onClick={handleScheduleSelected} className="btn-primary text-sm flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4" />
-                    Schedule Selected
+                  <button onClick={handleStageSelected} className="btn-primary text-sm flex items-center gap-1.5">
+                    <Layers className="w-4 h-4" />
+                    Stage {selectedIds.size} Asset{selectedIds.size !== 1 ? 's' : ''} →
                   </button>
                 </div>
               )}
               {selectedIds.size === 0 && filtered.length > 0 && (
                 <button onClick={selectAll} className="btn-secondary text-sm">Select All</button>
               )}
+              {/* Thumb size slider — only relevant in grid view */}
+              {viewMode === 'grid' && (
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <Rows3 className="w-4 h-4 text-slate-500" />
+                  <input
+                    type="range"
+                    min={2}
+                    max={6}
+                    step={1}
+                    value={thumbSize}
+                    onChange={(e) => setThumbSize(Number(e.target.value))}
+                    className="w-20 accent-blue-500 cursor-pointer"
+                    title={`Thumbnail size: ${thumbSize}`}
+                  />
+                </div>
+              )}
             </div>
 
 
-            {/* Thumbnail grid */}
+            {/* Thumbnail grid / list */}
             {filtered.length === 0 ? (
               <div className="card py-16 flex flex-col items-center text-center">
                 <FolderOpen className="w-12 h-12 text-slate-700 mb-3" />
                 <p className="text-slate-400 font-medium">No assets found</p>
                 <p className="text-slate-600 text-sm mt-1">Upload files or connect your S3 bucket</p>
               </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            ) : viewMode === 'grid' ? (
+              <div className={`grid gap-3 ${
+                thumbSize === 2 ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3' :
+                thumbSize === 3 ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4' :
+                thumbSize === 4 ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5' :
+                thumbSize === 5 ? 'grid-cols-3 sm:grid-cols-5 md:grid-cols-6' :
+                                  'grid-cols-4 sm:grid-cols-6 md:grid-cols-8'
+              }`}>
                 {filtered.map((asset) => (
                   <AssetThumbnail
                     key={asset.id}
@@ -741,6 +777,95 @@ export default function GalleryPage() {
                     onToggle={() => toggleSelect(asset.id)}
                   />
                 ))}
+              </div>
+            ) : (
+              <div className="card overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-700 text-left text-xs text-slate-500">
+                      <th className="py-2.5 pl-3 pr-2 w-8" />
+                      <th className="py-2.5 px-2 w-14" />
+                      <th className="py-2.5 px-2">File name</th>
+                      <th className="py-2.5 px-2">Type</th>
+                      <th className="py-2.5 px-2">Ratio</th>
+                      <th className="py-2.5 px-2">Size</th>
+                      <th className="py-2.5 px-2 pr-3">Uploaded</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((asset) => {
+                      const isSelected = selectedIds.has(asset.id);
+                      const uploadedLabel = asset.uploadedAt
+                        ? new Date(asset.uploadedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                        : '—';
+                      const isOkRatio = asset.aspectRatio
+                        ? Math.abs(asset.aspectRatio - 1.0) < 0.03 || Math.abs(asset.aspectRatio - 0.8) < 0.03
+                        : true;
+                      return (
+                        <tr
+                          key={asset.id}
+                          onClick={() => toggleSelect(asset.id)}
+                          className={`border-b border-slate-800 cursor-pointer transition-colors last:border-0 ${
+                            isSelected
+                              ? 'bg-blue-500/10 border-blue-500/30'
+                              : 'hover:bg-slate-800/50'
+                          }`}
+                        >
+                          {/* Checkbox */}
+                          <td className="py-2 pl-3 pr-2">
+                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                              isSelected ? 'bg-blue-600 border-blue-500' : 'border-slate-500'
+                            }`}>
+                              {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                            </div>
+                          </td>
+                          {/* Thumbnail */}
+                          <td className="py-2 px-2">
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 flex items-center justify-center flex-shrink-0">
+                              {asset.fileType === 'video' ? (
+                                <Film className="w-5 h-5 text-slate-500" />
+                              ) : asset.fileUrl ? (
+                                <img src={asset.fileUrl} alt={asset.fileName} className="w-full h-full object-cover" />
+                              ) : (
+                                <ImageIcon className="w-5 h-5 text-slate-500" />
+                              )}
+                            </div>
+                          </td>
+                          {/* File name */}
+                          <td className="py-2 px-2 max-w-[180px]">
+                            <p className="text-slate-200 truncate text-sm">{asset.fileName}</p>
+                          </td>
+                          {/* Type badge */}
+                          <td className="py-2 px-2">
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                              asset.fileType === 'video'
+                                ? 'bg-red-500/20 text-red-300'
+                                : 'bg-pink-500/20 text-pink-300'
+                            }`}>
+                              {asset.fileType}
+                            </span>
+                          </td>
+                          {/* Aspect ratio badge */}
+                          <td className="py-2 px-2">
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                              isOkRatio ? 'bg-green-500/20 text-green-300' : 'bg-amber-500/20 text-amber-300'
+                            }`}>
+                              {formatRatio(asset.aspectRatio)}
+                            </span>
+                          </td>
+                          {/* File size */}
+                          <td className="py-2 px-2 text-slate-400 text-xs whitespace-nowrap">
+                            {asset.sizeBytes ? formatBytes(asset.sizeBytes) : '—'}
+                          </td>
+                          {/* Upload date */}
+                          <td className="py-2 px-2 pr-3 text-slate-400 text-xs whitespace-nowrap">
+                            {uploadedLabel}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -760,6 +885,33 @@ export default function GalleryPage() {
       </main>
 
       {showCreatePostModal && <CreatePostModal />}
+
+      {/* ── Workflow overlays ── */}
+      {workflowStep === 'staging' && (
+        <StagingView onEditVariant={handleEditVariant} />
+      )}
+
+      {workflowStep === 'editing' && editingTarget && (() => {
+        const sa = stagedAssets.find((s) => s.asset.id === editingTarget.assetId);
+        if (!sa) return null;
+        const existingVariant = sa.variants.find((v) => v.ratio === editingTarget.ratio);
+        const item: EditableImage = {
+          id: sa.asset.id,
+          url: existingVariant?.editResult?.url || sa.asset.fileUrl,
+          name: sa.asset.fileName,
+          type: sa.asset.fileType,
+        };
+        return (
+          <ImageEditor
+            item={item}
+            lockedRatio={editingTarget.ratio}
+            onDone={handleEditorDone}
+            onCancel={handleEditorCancel}
+          />
+        );
+      })()}
+
+      {workflowStep === 'scheduling' && <BatchScheduler />}
     </div>
   );
 }

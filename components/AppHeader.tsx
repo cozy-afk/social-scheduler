@@ -2,10 +2,10 @@
 
 import { useStore } from '@/lib/store';
 import ModelSwitcher from '@/components/ModelSwitcher';
-import { Users, Calendar, FileText, Image, LayoutGrid, Zap, Boxes, BarChart2 } from 'lucide-react';
+import { Users, Calendar, FileText, LayoutGrid, Zap, Boxes, BarChart2, Settings } from 'lucide-react';
 import Link from 'next/link';
 
-export type ActivePage = 'calendar' | 'stories' | 'captions' | 'va' | 'models' | 'gallery' | 'analytics';
+export type ActivePage = 'calendar' | 'captions' | 'va' | 'models' | 'gallery' | 'analytics' | 'settings';
 
 interface AppHeaderProps {
   activePage: ActivePage;
@@ -65,13 +65,9 @@ export default function AppHeader({ activePage, isVA = false }: AppHeaderProps) 
                   <Calendar className="w-4 h-4 flex-shrink-0" />
                   <span className="whitespace-nowrap">Calendar</span>
                 </Link>
-                <Link href="/stories" className={activePage === 'stories' ? 'nav-link-active' : 'nav-link'}>
-                  <Image className="w-4 h-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap">Story Approval</span>
-                </Link>
                 <Link href="/captions" className={activePage === 'captions' ? 'nav-link-active' : 'nav-link'}>
                   <FileText className="w-4 h-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap">Caption Library</span>
+                  <span className="whitespace-nowrap">Post References</span>
                 </Link>
                 <Link href="/models" className={activePage === 'models' ? 'nav-link-active' : 'nav-link'}>
                   <Boxes className="w-4 h-4 flex-shrink-0" />
@@ -80,6 +76,10 @@ export default function AppHeader({ activePage, isVA = false }: AppHeaderProps) 
                 <Link href="/analytics" className={activePage === 'analytics' ? 'nav-link-active' : 'nav-link'}>
                   <BarChart2 className="w-4 h-4 flex-shrink-0" />
                   <span className="whitespace-nowrap">Analytics</span>
+                </Link>
+                <Link href="/settings" className={activePage === 'settings' ? 'nav-link-active' : 'nav-link'}>
+                  <Settings className="w-4 h-4 flex-shrink-0" />
+                  <span className="whitespace-nowrap">Settings</span>
                 </Link>
               </>
             )}

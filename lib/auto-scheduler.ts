@@ -218,6 +218,7 @@ function calculateScheduleSummary(posts: Post[]) {
     tiktok: 0,
     x: 0,
     threads: 0,
+    fanvue: 0,
   };
 
   const byDay: Record<string, number> = {};

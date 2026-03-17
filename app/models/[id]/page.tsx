@@ -10,7 +10,7 @@ import { createVAMagicLink, getVAMagicLinkURL } from '@/lib/magic-links';
 import {
   ArrowLeft, Save, ToggleLeft, ToggleRight, Plus, X,
   Check, Copy, Link2, Users, Clock, Zap, ChevronUp, ChevronDown,
-  Instagram, AlertCircle,
+  Instagram, AlertCircle, KeyRound, RefreshCw,
 } from 'lucide-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -35,6 +35,7 @@ const POST_TYPE_OPTIONS: Record<Platform, { value: PostType; label: string }[]> 
   ],
   x:       [{ value: 'x_post',       label: 'Post' }],
   threads: [{ value: 'threads_post', label: 'Post' }],
+  fanvue:  [{ value: 'fanvue_post',  label: 'Post' }],
 };
 
 const PLATFORM_BG: Record<Platform, string> = {
@@ -42,6 +43,7 @@ const PLATFORM_BG: Record<Platform, string> = {
   tiktok:    'bg-red-500/10 border-red-500/25',
   threads:   'bg-purple-500/10 border-purple-500/25',
   x:         'bg-slate-700/30 border-slate-600/40',
+  fanvue:    'bg-orange-500/10 border-orange-500/25',
 };
 
 // ─── PostingFrequencyCard ─────────────────────────────────────────────────────

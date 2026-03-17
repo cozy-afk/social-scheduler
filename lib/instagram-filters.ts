@@ -1,0 +1,40 @@
+export interface InstagramFilter {
+  name: string;
+  css: string;
+}
+
+export const INSTAGRAM_FILTERS: InstagramFilter[] = [
+  { name: 'Normal',    css: '' },
+  { name: 'Clarendon', css: 'brightness(1.1) contrast(1.2) saturate(1.35)' },
+  { name: 'Gingham',   css: 'brightness(1.05) hue-rotate(-10deg) sepia(0.06)' },
+  { name: 'Moon',      css: 'grayscale(1) brightness(1.1) contrast(1.1)' },
+  { name: 'Lark',      css: 'brightness(1.1) contrast(0.9) saturate(1.4) hue-rotate(5deg)' },
+  { name: 'Reyes',     css: 'sepia(0.22) brightness(1.1) contrast(0.85) saturate(0.75)' },
+  { name: 'Juno',      css: 'saturate(1.4) contrast(1.1) brightness(1.05) hue-rotate(-5deg)' },
+  { name: 'Slumber',   css: 'saturate(0.66) brightness(1.05) sepia(0.12)' },
+  { name: 'Crema',     css: 'sepia(0.15) contrast(0.9) brightness(1.1) saturate(0.85)' },
+  { name: 'Ludwig',    css: 'brightness(1.05) contrast(1.05) sepia(0.1) saturate(1.1)' },
+  { name: 'Aden',      css: 'hue-rotate(-20deg) saturate(0.85) brightness(1.15) contrast(0.9) sepia(0.1)' },
+  { name: 'Perpetua',  css: 'brightness(1.05) contrast(1.1) saturate(1.1) hue-rotate(10deg)' },
+  { name: 'Amaro',     css: 'brightness(1.1) contrast(0.9) saturate(1.5) hue-rotate(15deg) sepia(0.05)' },
+  { name: 'Mayfair',   css: 'brightness(1.04) contrast(1.1) saturate(1.2) sepia(0.05)' },
+  { name: 'Rise',      css: 'brightness(1.2) contrast(0.9) saturate(0.9) sepia(0.2)' },
+  { name: 'Hudson',    css: 'brightness(1.2) contrast(0.9) saturate(1.1) hue-rotate(-15deg) sepia(0.1)' },
+  { name: 'Valencia',  css: 'contrast(1.08) brightness(1.08) sepia(0.18) saturate(1.1)' },
+  { name: 'X-Pro II',  css: 'contrast(1.45) brightness(0.9) saturate(1.3) sepia(0.3)' },
+  { name: 'Sierra',    css: 'contrast(0.8) saturate(0.85) brightness(1.1) sepia(0.15)' },
+  { name: 'Willow',    css: 'grayscale(0.5) contrast(0.95) brightness(1.1) sepia(0.1)' },
+  { name: 'Lo-Fi',     css: 'saturate(1.8) contrast(1.5) brightness(0.9)' },
+  { name: 'Inkwell',   css: 'grayscale(1) brightness(1.1) contrast(1.05) sepia(0.05)' },
+  { name: 'Hefe',      css: 'contrast(1.4) saturate(1.5) brightness(0.9) sepia(0.2)' },
+  { name: 'Nashville', css: 'sepia(0.25) contrast(1.1) brightness(1.1) saturate(1.2) hue-rotate(-15deg)' },
+  { name: 'Stinson',   css: 'brightness(1.15) contrast(0.85) saturate(0.85) sepia(0.1)' },
+  { name: 'Vesper',    css: 'sepia(0.35) contrast(1.15) brightness(1.05) saturate(1.2)' },
+  { name: 'Earlybird', css: 'sepia(0.4) contrast(1.1) brightness(0.9) saturate(0.85)' },
+  { name: 'Brannan',   css: 'sepia(0.4) contrast(1.25) brightness(0.9) saturate(0.9)' },
+  { name: 'Sutro',     css: 'brightness(0.85) contrast(1.2) saturate(0.85) sepia(0.3)' },
+  { name: 'Toaster',   css: 'contrast(1.5) brightness(0.9) saturate(1.1) sepia(0.25)' },
+  { name: 'Walden',    css: 'brightness(1.1) sepia(0.3) hue-rotate(-10deg) saturate(1.6)' },
+  { name: '1977',      css: 'brightness(1.1) contrast(0.9) saturate(1.3) sepia(0.1) hue-rotate(10deg)' },
+  { name: 'Kelvin',    css: 'brightness(1.1) contrast(1.1) saturate(1.5) hue-rotate(10deg) sepia(0.1)' },
+];
