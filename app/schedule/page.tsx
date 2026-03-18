@@ -9,17 +9,18 @@ import {
   CheckCircle2, ExternalLink, Share2, Send, Repeat2, MoreHorizontal,
   TrendingUp, CalendarDays, Play, Music2, Grid3X3, Clapperboard,
   Copy, Search, ArrowLeft, Plus, Wifi, Signal, Battery,
-  BookMarked, UserCheck, Images, Eye,
+  BookMarked, UserCheck, Images, Eye, Clock, AlertTriangle,
+  Layers, Smartphone,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay,
   addMonths, subMonths, isToday, parseISO, isWithinInterval,
+  startOfWeek, addDays, differenceInCalendarDays,
 } from 'date-fns';
 import { PLATFORM_THEMES } from '@/lib/constants/platform';
 import type { PostType } from '@/types/models';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, FanvueIcon } from '@/components/PlatformIcons';
-import FeedPreviewPanel from '@/components/FeedPreviewPanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -768,6 +769,266 @@ function QuotaBar({ label, scheduled, target, color }: QuotaEntry) {
   );
 }
 
+// ─── Best post times (platform strategy data) ─────────────────────────────────
+
+const WEEKLY_TARGETS: Partial<Record<Platform, number>> = {
+  instagram: 4, tiktok: 7, x: 5, threads: 5, fanvue: 3,
+};
+
+const BEST_TIMES: Partial<Record<Platform, string>> = {
+  instagram: '6–9am · 11am–1pm · 7–9pm',
+  tiktok: '7–9am · 7–11pm',
+  threads: '9–11am · 3–5pm',
+  x: '8–10am · 12–1pm · 5–7pm',
+};
+
+// ─── StatCard ─────────────────────────────────────────────────────────────────
+
+function StatCard({ label, value, sub, color, icon: Icon }: {
+  label: string; value: string; sub?: string; color?: string;
+  icon?: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <div className="flex-1 rounded-xl p-4 flex flex-col gap-1"
+      style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="flex items-center gap-1.5 mb-0.5">
+        {Icon && <Icon className="w-3 h-3" />}
+        <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{label}</p>
+      </div>
+      <p className="text-2xl font-bold leading-none" style={{ color: color ?? '#fff' }}>{value}</p>
+      {sub && <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>}
+    </div>
+  );
+}
+
+// ─── WeeklyTimeline ───────────────────────────────────────────────────────────
+
+const PLATFORM_PILL_COLORS: Partial<Record<Platform, string>> = {
+  instagram: '#e1306c',
+  tiktok: '#25f4ee',
+  x: '#1d9bf0',
+  threads: '#888',
+  fanvue: '#7C3AED',
+};
+
+function WeeklyTimeline({ posts }: { posts: Post[] }) {
+  const today = new Date();
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  return (
+    <div className="rounded-xl overflow-hidden flex-shrink-0"
+      style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="px-4 py-3 flex items-center justify-between"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <p className="text-xs font-bold text-white flex items-center gap-2">
+          <CalendarDays className="w-3.5 h-3.5 text-violet-400" />
+          Weekly Timeline · {format(weekStart, 'MMM d')} – {format(addDays(weekStart, 6), 'MMM d')}
+        </p>
+        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          Color = platform · shape = type (▶ reel · ◉ story · ▪ post)
+        </p>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5 p-3">
+        {days.map((day) => {
+          const dayPosts = posts.filter((p) => isSameDay(parseISO(p.scheduledTime), day));
+          const isCurrentDay = isToday(day);
+          const isPastDay = day < today && !isCurrentDay;
+          const hasGap = dayPosts.length === 0;
+
+          return (
+            <div key={day.toISOString()} className="flex flex-col gap-1 p-2 rounded-lg min-h-[128px]"
+              style={{
+                background: isCurrentDay ? 'rgba(124,58,237,0.08)' : 'rgba(255,255,255,0.02)',
+                border: `1px solid ${
+                  isCurrentDay
+                    ? 'rgba(124,58,237,0.35)'
+                    : hasGap && !isPastDay
+                    ? 'rgba(251,191,36,0.25)'
+                    : 'rgba(255,255,255,0.05)'
+                }`,
+              }}>
+              {/* Day header */}
+              <div className="flex flex-col items-center mb-1.5">
+                <span className="text-[9px] font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--text-muted)' }}>
+                  {format(day, 'EEE')}
+                </span>
+                <span className={`text-sm font-bold leading-tight ${
+                  isCurrentDay ? 'text-violet-400' : isPastDay ? 'text-zinc-600' : 'text-white'
+                }`}>
+                  {format(day, 'd')}
+                </span>
+              </div>
+
+              {/* Gap badge */}
+              {hasGap && !isPastDay && (
+                <div className="flex items-center justify-center flex-1">
+                  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded"
+                    style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>
+                    GAP
+                  </span>
+                </div>
+              )}
+
+              {/* Post pills */}
+              {dayPosts.slice(0, 6).map((p) => {
+                const color = PLATFORM_PILL_COLORS[p.platform] ?? '#888';
+                const symbol = REEL_TYPES.has(p.postType) ? '▶' : STORY_TYPES.has(p.postType) ? '◉' : '▪';
+                return (
+                  <div key={p.id}
+                    className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-semibold truncate"
+                    style={{ background: color + '22', color }}>
+                    <span>{symbol}</span>
+                    <span className="truncate">{format(parseISO(p.scheduledTime), 'h:mma')}</span>
+                  </div>
+                );
+              })}
+              {dayPosts.length > 6 && (
+                <p className="text-[8px] text-center" style={{ color: 'var(--text-muted)' }}>
+                  +{dayPosts.length - 6}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── UpcomingQueue ────────────────────────────────────────────────────────────
+
+function UpcomingQueue({ posts }: { posts: Post[] }) {
+  const upcoming = useMemo(() => {
+    const now = new Date();
+    return posts
+      .filter((p) => parseISO(p.scheduledTime) > now)
+      .slice(0, 7);
+  }, [posts]);
+
+  return (
+    <div className="rounded-xl overflow-hidden h-full flex flex-col"
+      style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="px-4 py-3 flex-shrink-0"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <p className="text-xs font-bold text-white flex items-center gap-2">
+          <Clock className="w-3.5 h-3.5 text-violet-400" />
+          Upcoming Queue
+        </p>
+      </div>
+      <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-1.5">
+        {upcoming.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-2 py-8">
+            <AlertTriangle className="w-5 h-5 text-amber-400" />
+            <p className="text-[11px] text-zinc-500">No upcoming posts scheduled</p>
+          </div>
+        ) : upcoming.map((p) => {
+          const thumbUrl = p.assets[0]?.fileUrl;
+          const noCaption = !p.description?.trim();
+          const color = PLATFORM_PILL_COLORS[p.platform] ?? '#888';
+          return (
+            <div key={p.id} className="flex items-center gap-2.5 p-2.5 rounded-lg"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.05)' }}>
+              {/* Thumbnail */}
+              <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-800">
+                {thumbUrl ? (
+                  <img src={thumbUrl} className="w-full h-full object-cover" alt="" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Images className="w-4 h-4 text-zinc-600" />
+                  </div>
+                )}
+              </div>
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                  <span className="text-[10px] font-bold text-white">
+                    {PLATFORM_THEMES[p.platform].label}
+                  </span>
+                  <span className="text-[8px] px-1.5 py-0.5 rounded font-semibold"
+                    style={{ background: color + '22', color }}>
+                    {REEL_TYPES.has(p.postType) ? 'Reel' : STORY_TYPES.has(p.postType) ? 'Story' : 'Post'}
+                  </span>
+                  {noCaption && (
+                    <span className="text-[8px] px-1.5 py-0.5 rounded font-semibold"
+                      style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>
+                      No caption
+                    </span>
+                  )}
+                </div>
+                <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                  {format(parseISO(p.scheduledTime), 'EEE MMM d · h:mm a')}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── PlatformHealthGrid ───────────────────────────────────────────────────────
+
+function PlatformHealthGrid({ posts, enabledPlatforms }: {
+  posts: Post[]; enabledPlatforms: Platform[];
+}) {
+  const now = new Date();
+  const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+  const weekEnd = addDays(weekStart, 6);
+
+  const weekPosts = posts.filter((p) => {
+    const d = parseISO(p.scheduledTime);
+    return d >= weekStart && d <= weekEnd;
+  });
+
+  return (
+    <div className="rounded-xl overflow-hidden"
+      style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="px-4 py-3"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <p className="text-xs font-bold text-white flex items-center gap-2">
+          <TrendingUp className="w-3.5 h-3.5 text-violet-400" />
+          Platform Health · This Week
+        </p>
+      </div>
+      <div className="p-3 grid grid-cols-2 gap-2">
+        {enabledPlatforms.map((platform) => {
+          const target = WEEKLY_TARGETS[platform] ?? 5;
+          const count = weekPosts.filter((p) => p.platform === platform).length;
+          const pct = Math.min(count / target, 1);
+          const color = pct >= 0.8 ? '#4ade80' : pct >= 0.5 ? '#fbbf24' : '#f87171';
+          const theme = PLATFORM_THEMES[platform];
+          const bestTime = BEST_TIMES[platform];
+
+          return (
+            <div key={platform} className="p-3 rounded-lg"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <theme.icon size={12} />
+                  <span className="text-[10px] font-bold text-white">{theme.label}</span>
+                </div>
+                <span className="text-sm font-bold" style={{ color }}>{count}/{target}</span>
+              </div>
+              <div className="h-1.5 rounded-full mb-2" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                <div className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${pct * 100}%`, background: color }} />
+              </div>
+              {bestTime && (
+                <p className="text-[8px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                  Peak: {bestTime}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SchedulePage() {
@@ -801,7 +1062,29 @@ export default function SchedulePage() {
   const [activePlatform, setActivePlatform] = useState<Platform>('instagram');
   const [calMonth, setCalMonth] = useState(new Date());
   const [selectedCalDate, setSelectedCalDate] = useState<Date | null>(null);
-  const [showFeedPreview, setShowFeedPreview] = useState(false);
+  const [showPhonePreview, setShowPhonePreview] = useState(false);
+
+  // ─── Stat computations ────────────────────────────────────────────────────
+
+  const enabledPlatforms = useMemo<Platform[]>(() => {
+    if (!selectedModel) return ['instagram', 'tiktok'];
+    return selectedModel.postingFrequency.filter((f) => f.enabled).map((f) => f.platform);
+  }, [selectedModel]);
+
+  const weeklyStats = useMemo(() => {
+    const now = new Date();
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+    const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+    const covered = days.filter((d) =>
+      modelPosts.some((p) => isSameDay(parseISO(p.scheduledTime), d))
+    ).length;
+    const futurePosts = modelPosts.filter((p) => parseISO(p.scheduledTime) > now);
+    const lastPost = futurePosts.length > 0 ? futurePosts[futurePosts.length - 1] : null;
+    const queueDays = lastPost
+      ? differenceInCalendarDays(parseISO(lastPost.scheduledTime), now)
+      : 0;
+    return { covered, queueDays };
+  }, [modelPosts]);
 
   // IG media fetched from Graph API
   const [igMedia, setIgMedia] = useState<IGMediaItem[]>([]);
@@ -890,7 +1173,11 @@ export default function SchedulePage() {
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div>
           <h1 className="page-title">Schedule Planner</h1>
-          <p className="page-subtitle">Preview your profile grid, plan aesthetic, and track quota progress</p>
+          <p className="page-subtitle">
+            {showPhonePreview
+              ? 'Drag approved assets onto the grid to preview your profile aesthetic'
+              : 'Weekly coverage, queue depth, and platform health at a glance'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {approvedAssets.length > 0 && (
@@ -899,17 +1186,6 @@ export default function SchedulePage() {
               {approvedAssets.length} approved
             </span>
           )}
-          <button
-            onClick={() => setShowFeedPreview(!showFeedPreview)}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all ${
-              showFeedPreview
-                ? 'bg-violet-600 border-violet-500 text-white'
-                : 'btn-secondary'
-            }`}
-          >
-            <Eye className="w-3.5 h-3.5" />
-            {showFeedPreview ? 'Hide' : 'Preview'}
-          </button>
           <Link href="/gallery" className="btn-secondary text-xs flex items-center gap-1.5">
             <CalendarDays className="w-3.5 h-3.5" />
             Gallery
@@ -917,10 +1193,10 @@ export default function SchedulePage() {
         </div>
       </div>
 
-      {/* 3-Panel */}
+      {/* Body */}
       <div className="flex-1 flex gap-4 p-4 overflow-hidden min-h-0">
 
-        {/* LEFT */}
+        {/* LEFT: Approved assets panel */}
         <ApprovedAssetsPanel
           assets={approvedAssets}
           selectedId={null}
@@ -928,179 +1204,275 @@ export default function SchedulePage() {
           onDragStart={handleDragStart}
         />
 
-        {/* MIDDLE */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden gap-3">
-          {/* Platform tabs */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-[10px] uppercase tracking-wider font-semibold mr-1" style={{ color: 'var(--text-muted)' }}>Platform view</span>
-            {PREVIEW_PLATFORMS.map((p) => {
-              const theme = PLATFORM_THEMES[p];
-              const active = activePlatform === p;
-              const IconComponent = theme.icon;
-              return (
-                <button key={p} onClick={() => setActivePlatform(p)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                  style={{
-                    background: active ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.05)',
-                    border: `1px solid ${active ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.08)'}`,
-                    color: active ? '#fff' : 'var(--text-muted)',
-                  }}>
-                  <IconComponent size={14} />{theme.label}
+        {showPhonePreview ? (
+          /* ── Phone preview mode ── */
+          <>
+            {/* PHONE COLUMN */}
+            <div className="flex flex-col gap-3 overflow-hidden" style={{ width: 380 }}>
+              {/* Platform tabs + hide toggle */}
+              <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                <button
+                  onClick={() => setShowPhonePreview(false)}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all"
+                  style={{ background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.4)', color: '#a78bfa' }}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  Strategy view
                 </button>
-              );
-            })}
-          </div>
+                <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>|</span>
+                {PREVIEW_PLATFORMS.map((p) => {
+                  const theme = PLATFORM_THEMES[p];
+                  const active = activePlatform === p;
+                  return (
+                    <button key={p} onClick={() => setActivePlatform(p)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                      style={{
+                        background: active ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${active ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.08)'}`,
+                        color: active ? '#fff' : 'var(--text-muted)',
+                      }}>
+                      <theme.icon size={13} />{theme.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Phone frame */}
+              <div className="flex-1 flex items-start justify-center overflow-y-auto no-scrollbar pt-1">
+                <PhoneFrame dark={activePlatform === 'tiktok' || activePlatform === 'x'}>
+                  {activePlatform === 'instagram' && (
+                    <IGProfilePage
+                      modelName={selectedModel?.name ?? 'Creator'}
+                      mediaItems={igMedia}
+                      plannedAssets={approvedAssets}
+                      gridSlots={gridSlots}
+                      dragOverSlot={dragOverSlot}
+                      onDropToSlot={handleDropToSlot}
+                      onDragOver={setDragOverSlot}
+                      onDragLeave={() => setDragOverSlot(null)}
+                      loading={igLoading}
+                    />
+                  )}
+                  {activePlatform === 'tiktok' && (
+                    <TikTokProfilePage
+                      modelName={selectedModel?.name ?? 'Creator'}
+                      posts={modelPosts}
+                      plannedAssets={approvedAssets}
+                      gridSlots={gridSlots}
+                      dragOverSlot={dragOverSlot}
+                      onDropToSlot={handleDropToSlot}
+                      onDragOver={setDragOverSlot}
+                      onDragLeave={() => setDragOverSlot(null)}
+                    />
+                  )}
+                  {activePlatform === 'threads' && (
+                    <ThreadsProfilePage modelName={selectedModel?.name ?? 'Creator'} posts={modelPosts} />
+                  )}
+                  {activePlatform === 'x' && (
+                    <XProfilePage modelName={selectedModel?.name ?? 'Creator'} posts={modelPosts} />
+                  )}
+                </PhoneFrame>
+              </div>
+            </div>
 
-          {/* Phone + instruction */}
-          <div className="flex-1 flex items-start justify-center gap-8 overflow-y-auto no-scrollbar pt-2">
-            {/* Phone frame */}
-            <PhoneFrame dark={activePlatform === 'tiktok' || activePlatform === 'x'}>
-              {activePlatform === 'instagram' && (
-                <IGProfilePage
-                  modelName={selectedModel?.name ?? 'Creator'}
-                  mediaItems={igMedia}
-                  plannedAssets={approvedAssets}
-                  gridSlots={gridSlots}
-                  dragOverSlot={dragOverSlot}
-                  onDropToSlot={handleDropToSlot}
-                  onDragOver={setDragOverSlot}
-                  onDragLeave={() => setDragOverSlot(null)}
-                  loading={igLoading}
-                />
-              )}
-              {activePlatform === 'tiktok' && (
-                <TikTokProfilePage
-                  modelName={selectedModel?.name ?? 'Creator'}
-                  posts={modelPosts}
-                  plannedAssets={approvedAssets}
-                  gridSlots={gridSlots}
-                  dragOverSlot={dragOverSlot}
-                  onDropToSlot={handleDropToSlot}
-                  onDragOver={setDragOverSlot}
-                  onDragLeave={() => setDragOverSlot(null)}
-                />
-              )}
-              {activePlatform === 'threads' && (
-                <ThreadsProfilePage modelName={selectedModel?.name ?? 'Creator'} posts={modelPosts} />
-              )}
-              {activePlatform === 'x' && (
-                <XProfilePage modelName={selectedModel?.name ?? 'Creator'} posts={modelPosts} />
-              )}
-            </PhoneFrame>
-
-            {/* Tip card */}
-            <div className="flex flex-col gap-3 mt-4 max-w-[200px]">
-              <div className="rounded-xl p-3" style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                <p className="text-[11px] font-bold text-white mb-1">How to use</p>
-                <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                  1. Approve assets in Gallery<br />
-                  2. Drag them from the left panel<br />
-                  3. Drop onto a grid slot<br />
-                  4. See how they look live in the profile
+            {/* CONDENSED OVERVIEW (right column) */}
+            <aside className="flex-shrink-0 flex flex-col overflow-hidden rounded-xl"
+              style={{ width: 280, background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <div className="px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <p className="text-xs font-bold text-white flex items-center gap-2">
+                  <TrendingUp className="w-3.5 h-3.5 text-violet-400" />
+                  Schedule Overview
                 </p>
               </div>
-              {selectedModel?.metaConnection?.instagramAccountId ? (
-                <div className="rounded-xl p-3" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}>
-                  <p className="text-[10px] font-bold text-green-400 mb-0.5">Live IG Connected</p>
-                  <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                    Showing real posts from Graph API
-                  </p>
-                </div>
-              ) : (
-                <div className="rounded-xl p-3" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
-                  <p className="text-[10px] font-bold text-amber-400 mb-0.5">Using scheduled posts</p>
-                  <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                    Connect IG in Settings to pull live grid
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT - Feed Preview or Schedule Overview */}
-        {showFeedPreview && selectedModelId ? (
-          <FeedPreviewPanel
-            modelId={selectedModelId}
-            modelName={selectedModel?.name || ''}
-            selectedAssets={approvedAssets}
-            isOpen={showFeedPreview}
-            onToggle={() => setShowFeedPreview(false)}
-          />
-        ) : (
-          <aside className="flex-shrink-0 flex flex-col overflow-hidden rounded-xl"
-            style={{ width: 268, background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
-            <div className="px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <p className="text-xs font-bold text-white flex items-center gap-2">
-                <TrendingUp className="w-3.5 h-3.5 text-violet-400" />
-                Schedule Overview
-              </p>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 no-scrollbar space-y-5">
-              <MiniCalendar
-                month={calMonth}
-                posts={modelPosts}
-                onPrev={() => setCalMonth((m) => subMonths(m, 1))}
-                onNext={() => setCalMonth((m) => addMonths(m, 1))}
-                selectedDate={selectedCalDate}
-                onSelectDate={setSelectedCalDate}
-              />
-
-              {selectedCalDate && (
+              <div className="flex-1 overflow-y-auto p-4 no-scrollbar space-y-5">
+                <MiniCalendar
+                  month={calMonth}
+                  posts={modelPosts}
+                  onPrev={() => setCalMonth((m) => subMonths(m, 1))}
+                  onNext={() => setCalMonth((m) => addMonths(m, 1))}
+                  selectedDate={selectedCalDate}
+                  onSelectDate={setSelectedCalDate}
+                />
+                {selectedCalDate && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                      {format(selectedCalDate, 'MMM d')} · {selectedDayPosts.length} post{selectedDayPosts.length !== 1 ? 's' : ''}
+                    </p>
+                    {selectedDayPosts.length === 0 ? (
+                      <p className="text-[11px] text-zinc-600">No posts scheduled</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {selectedDayPosts.map((p) => (
+                          <div key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                            style={{ background: 'rgba(255,255,255,0.04)' }}>
+                            <span>
+                              {p.platform === 'instagram' && <InstagramIcon size={13} />}
+                              {p.platform === 'tiktok' && <TikTokIcon size={13} />}
+                              {p.platform === 'x' && <XIcon size={13} />}
+                              {p.platform === 'threads' && <ThreadsIcon size={13} />}
+                              {p.platform === 'fanvue' && <FanvueIcon size={13} />}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[10px] font-semibold text-white truncate">
+                                {PLATFORM_THEMES[p.platform].label}
+                              </p>
+                              <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                                {format(parseISO(p.scheduledTime), 'h:mm a')} ·{' '}
+                                {REEL_TYPES.has(p.postType) ? 'Reel' : STORY_TYPES.has(p.postType) ? 'Story' : 'Post'}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Quota */}
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
-                    {format(selectedCalDate, 'MMM d')} · {selectedDayPosts.length} post{selectedDayPosts.length !== 1 ? 's' : ''}
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-3"
+                    style={{ color: 'var(--text-muted)' }}>
+                    Monthly Quotas · {format(new Date(), 'MMM')}
                   </p>
-                  {selectedDayPosts.length === 0 ? (
-                    <p className="text-[11px] text-zinc-600">No posts scheduled</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {selectedDayPosts.map((p) => (
-                        <div key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                          <span className="text-sm">
-                            {p.platform === 'instagram' && <InstagramIcon size={14} />}
-                            {p.platform === 'tiktok' && <TikTokIcon size={14} />}
-                            {p.platform === 'x' && <XIcon size={14} />}
-                            {p.platform === 'threads' && <ThreadsIcon size={14} />}
-                            {p.platform === 'fanvue' && <FanvueIcon size={14} />}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[10px] font-semibold text-white truncate">{PLATFORM_THEMES[p.platform].label}</p>
-                            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                              {format(parseISO(p.scheduledTime), 'h:mm a')} · {REEL_TYPES.has(p.postType) ? 'Reel' : STORY_TYPES.has(p.postType) ? 'Story' : 'Post'}
+                  {quotas.map(({ platform, entries }) => (
+                    <div key={platform} className="mb-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        {platform === 'instagram' && <InstagramIcon size={13} />}
+                        {platform === 'tiktok' && <TikTokIcon size={13} />}
+                        {platform === 'x' && <XIcon size={13} />}
+                        {platform === 'threads' && <ThreadsIcon size={13} />}
+                        {platform === 'fanvue' && <FanvueIcon size={13} />}
+                        <p className="text-[11px] font-bold text-white">{PLATFORM_THEMES[platform].label}</p>
+                      </div>
+                      {entries.map((e) => <QuotaBar key={e.label} {...e} />)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </aside>
+          </>
+        ) : (
+          /* ── Strategy command center (default) ── */
+          <div className="flex-1 flex flex-col gap-3 overflow-hidden min-w-0">
+
+            {/* Stat cards + phone toggle */}
+            <div className="flex items-stretch gap-3 flex-shrink-0">
+              <StatCard
+                label="Days covered this week"
+                value={`${weeklyStats.covered}/7`}
+                sub={weeklyStats.covered >= 6 ? 'Great consistency' : weeklyStats.covered >= 4 ? 'A few gaps' : 'Needs attention'}
+                color={weeklyStats.covered >= 6 ? '#4ade80' : weeklyStats.covered >= 4 ? '#fbbf24' : '#f87171'}
+                icon={CalendarDays}
+              />
+              <StatCard
+                label="Queue depth"
+                value={weeklyStats.queueDays > 0 ? `${weeklyStats.queueDays}d` : 'Empty'}
+                sub={weeklyStats.queueDays >= 14 ? 'Well stocked' : weeklyStats.queueDays >= 7 ? 'Running low soon' : 'Needs content now'}
+                color={weeklyStats.queueDays >= 14 ? '#4ade80' : weeklyStats.queueDays >= 7 ? '#fbbf24' : '#f87171'}
+                icon={Layers}
+              />
+              <StatCard
+                label="Assets ready"
+                value={String(approvedAssets.length)}
+                sub="approved in gallery"
+                icon={Images}
+              />
+              <button
+                onClick={() => setShowPhonePreview(true)}
+                className="flex-shrink-0 flex flex-col items-center justify-center gap-2 px-6 rounded-xl border transition-all hover:border-violet-500"
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid rgba(255,255,255,0.07)',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <Smartphone className="w-5 h-5 text-violet-400" />
+                <span className="text-[10px] font-semibold uppercase tracking-wide">Grid preview</span>
+              </button>
+            </div>
+
+            {/* Weekly timeline */}
+            <WeeklyTimeline posts={modelPosts} />
+
+            {/* Bottom row: upcoming queue + platform health + quota */}
+            <div className="flex gap-3 flex-1 min-h-0 overflow-hidden">
+
+              {/* Upcoming queue */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <UpcomingQueue posts={modelPosts} />
+              </div>
+
+              {/* Platform health + quota */}
+              <div className="flex flex-col gap-3 overflow-y-auto no-scrollbar flex-shrink-0" style={{ width: 340 }}>
+                <PlatformHealthGrid posts={modelPosts} enabledPlatforms={enabledPlatforms} />
+
+                {/* Monthly quota */}
+                <div className="rounded-xl overflow-hidden"
+                  style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <p className="text-xs font-bold text-white flex items-center gap-2">
+                      <TrendingUp className="w-3.5 h-3.5 text-violet-400" />
+                      Monthly Quotas · {format(new Date(), 'MMM')}
+                    </p>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    {quotas.map(({ platform, entries }) => (
+                      <div key={platform}>
+                        <div className="flex items-center gap-2 mb-2">
+                          {platform === 'instagram' && <InstagramIcon size={13} />}
+                          {platform === 'tiktok' && <TikTokIcon size={13} />}
+                          {platform === 'x' && <XIcon size={13} />}
+                          {platform === 'threads' && <ThreadsIcon size={13} />}
+                          {platform === 'fanvue' && <FanvueIcon size={13} />}
+                          <p className="text-[11px] font-bold text-white">{PLATFORM_THEMES[platform].label}</p>
+                        </div>
+                        {entries.map((e) => <QuotaBar key={e.label} {...e} />)}
+                      </div>
+                    ))}
+                    {quotas.length === 0 && (
+                      <p className="text-[11px] text-zinc-600">Configure posting frequency in Settings</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Calendar */}
+                <div className="rounded-xl overflow-hidden"
+                  style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div className="p-4">
+                    <MiniCalendar
+                      month={calMonth}
+                      posts={modelPosts}
+                      onPrev={() => setCalMonth((m) => subMonths(m, 1))}
+                      onNext={() => setCalMonth((m) => addMonths(m, 1))}
+                      selectedDate={selectedCalDate}
+                      onSelectDate={setSelectedCalDate}
+                    />
+                    {selectedCalDate && selectedDayPosts.length > 0 && (
+                      <div className="mt-3 pt-3 space-y-1.5"
+                        style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <p className="text-[9px] font-semibold uppercase tracking-wider mb-2"
+                          style={{ color: 'var(--text-muted)' }}>
+                          {format(selectedCalDate, 'MMM d')} · {selectedDayPosts.length} post{selectedDayPosts.length !== 1 ? 's' : ''}
+                        </p>
+                        {selectedDayPosts.slice(0, 4).map((p) => (
+                          <div key={p.id} className="flex items-center gap-2 px-2 py-1 rounded-lg"
+                            style={{ background: 'rgba(255,255,255,0.04)' }}>
+                            {p.platform === 'instagram' && <InstagramIcon size={11} />}
+                            {p.platform === 'tiktok' && <TikTokIcon size={11} />}
+                            {p.platform === 'x' && <XIcon size={11} />}
+                            {p.platform === 'threads' && <ThreadsIcon size={11} />}
+                            {p.platform === 'fanvue' && <FanvueIcon size={11} />}
+                            <p className="text-[9px] text-white flex-1 truncate">
+                              {format(parseISO(p.scheduledTime), 'h:mm a')} ·{' '}
+                              {REEL_TYPES.has(p.postType) ? 'Reel' : STORY_TYPES.has(p.postType) ? 'Story' : 'Post'}
                             </p>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Quota */}
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>
-                  Monthly Quotas · {format(new Date(), 'MMM')}
-                </p>
-                {quotas.map(({ platform, entries }) => (
-                  <div key={platform} className="mb-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm">
-                        {platform === 'instagram' && <InstagramIcon size={14} />}
-                        {platform === 'tiktok' && <TikTokIcon size={14} />}
-                        {platform === 'x' && <XIcon size={14} />}
-                        {platform === 'threads' && <ThreadsIcon size={14} />}
-                        {platform === 'fanvue' && <FanvueIcon size={14} />}
-                      </span>
-                      <p className="text-[11px] font-bold text-white">{PLATFORM_THEMES[platform].label}</p>
-                    </div>
-                    {entries.map((e) => <QuotaBar key={e.label} {...e} />)}
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))}
+                </div>
               </div>
             </div>
-          </aside>
+          </div>
         )}
       </div>
     </div>
