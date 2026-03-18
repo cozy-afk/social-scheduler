@@ -20,7 +20,7 @@ import {
   Send, Play, Music2, Layers,
   Grid3X3, List, Rows3, CheckCheck, ThumbsUp, CalendarCheck,
   Share2, ChevronRight, Plus, Wifi, Signal, Battery,
-  Sparkles, Copy, Zap, Star,
+  Sparkles, Copy, Zap, Star, Pencil, CalendarPlus,
 } from 'lucide-react';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -143,6 +143,7 @@ function AssetThumbnail({
   onToggle,
   onApprove,
   onPreviewVideo,
+  onEdit,
   showVirality,
   viralityAnalysis,
 }: {
@@ -153,6 +154,7 @@ function AssetThumbnail({
   onToggle: () => void;
   onApprove: (e: React.MouseEvent) => void;
   onPreviewVideo: (e: React.MouseEvent) => void;
+  onEdit?: () => void;
   showVirality: boolean;
   viralityAnalysis?: ViralityAnalysis;
 }) {
@@ -271,6 +273,17 @@ function AssetThumbnail({
         {formatRatio(asset.aspectRatio)}
       </div>
 
+      {/* Edit button — only for images */}
+      {onEdit && asset.fileType === 'image' && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          title="Edit photo"
+          className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/70 border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-violet-600/90 hover:border-violet-400 z-10"
+        >
+          <Pencil className="w-3.5 h-3.5 text-white" />
+        </button>
+      )}
+
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent px-2 py-2 translate-y-full group-hover:translate-y-0 transition-transform">
         <p className="text-[10px] text-slate-200 truncate">{asset.fileName}</p>
         {asset.sizeBytes && <p className="text-[9px] text-slate-400">{formatBytes(asset.sizeBytes)}</p>}
@@ -313,6 +326,8 @@ export default function GalleryPage() {
   const [page, setPage] = useState(1);
   const [previewVideo, setPreviewVideo] = useState<GalleryAsset | null>(null);
   const [showFeedPreview, setShowFeedPreview] = useState(false);
+  const [galleryEditingAsset, setGalleryEditingAsset] = useState<GalleryAsset | null>(null);
+  const [postEditVariant, setPostEditVariant] = useState<GalleryAsset | null>(null);
   const [thumbSize, setThumbSize] = useState(3);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -649,9 +664,11 @@ export default function GalleryPage() {
       return;
     }
 
-    // Check if edits were applied (has filters or overlays)
-    const hasEdits = Object.keys(result.filters).some((key) => key !== 'namedFilter' && (result.filters as unknown as Record<string, number>)[key] !== 0) ||
-                     result.overlays && result.overlays.length > 0;
+    // Only create a variant if actual edits were made (compare against defaults)
+    const f = result.filters;
+    const isDefaultFilters = f.brightness === 100 && f.contrast === 100 && f.saturation === 100 &&
+      f.warmth === 0 && f.vignette === 0 && f.fade === 0 && f.sharpen === 0 && !f.namedFilter;
+    const hasEdits = !isDefaultFilters || (result.overlays && result.overlays.length > 0);
 
     if (hasEdits) {
       // Create a new variant with the edited version
@@ -673,6 +690,20 @@ export default function GalleryPage() {
     setEditingTarget(null);
     setWorkflowStep('staging');
   }, [setEditingTarget, setWorkflowStep]);
+
+  // Direct edit from gallery (no staging required)
+  const handleGalleryEditorDone = useCallback(async (result: ImageEditorResult) => {
+    if (!galleryEditingAsset) return;
+    const f = result.filters;
+    const isDefaultFilters = f.brightness === 100 && f.contrast === 100 && f.saturation === 100 &&
+      f.warmth === 0 && f.vignette === 0 && f.fade === 0 && f.sharpen === 0 && !f.namedFilter;
+    const hasEdits = !isDefaultFilters || (result.overlays && result.overlays.length > 0);
+    if (hasEdits) {
+      const variant = await createEditedVariant(galleryEditingAsset, result.url, 'edited');
+      setPostEditVariant(variant);
+    }
+    setGalleryEditingAsset(null);
+  }, [galleryEditingAsset, createEditedVariant]);
 
   // Analyze virality for all images
   const analyzeAllVirality = useCallback(async () => {
@@ -945,20 +976,7 @@ export default function GalleryPage() {
                     <Layers className="w-4 h-4" />
                     Stage {selectedIds.size} Asset{selectedIds.size !== 1 ? 's' : ''} →
                   </button>
-                  {selectedIds.size === 1 && (
-                    <button
-                      onClick={() => {
-                        const selectedAsset = galleryAssets.find((a) => selectedIds.has(a.id));
-                        if (selectedAsset) {
-                          createVariant(selectedAsset, 'copy');
-                        }
-                      }}
-                      className="btn-secondary text-sm flex items-center gap-1.5"
-                    >
-                      <Copy className="w-4 h-4" />
-                      Create Variant
-                    </button>
-                  )}
+
                 </div>
               )}
               {selectedIds.size === 0 && filtered.length > 0 && (
@@ -1022,6 +1040,7 @@ export default function GalleryPage() {
                     onToggle={() => toggleSelect(asset.id)}
                     onApprove={(e) => toggleApprove(e, asset.id)}
                     onPreviewVideo={(e) => { e.stopPropagation(); setPreviewVideo(asset); }}
+                    onEdit={() => setGalleryEditingAsset(asset)}
                     showVirality={showVirality}
                     viralityAnalysis={viralityCache.get(asset.id)}
                   />
@@ -1318,6 +1337,59 @@ export default function GalleryPage() {
       })()}
 
       {workflowStep === 'scheduling' && <BatchScheduler />}
+
+      {/* Direct-from-gallery editor */}
+      {galleryEditingAsset && (
+        <ImageEditor
+          item={{
+            id: galleryEditingAsset.id,
+            url: galleryEditingAsset.fileUrl,
+            name: galleryEditingAsset.fileName,
+            type: galleryEditingAsset.fileType,
+          }}
+          onDone={handleGalleryEditorDone}
+          onCancel={() => setGalleryEditingAsset(null)}
+        />
+      )}
+
+      {/* Post-edit action sheet */}
+      {postEditVariant && (
+        <div className="fixed inset-0 z-[80] bg-black/75 flex items-center justify-center p-4">
+          <div className="bg-[#18181B] border border-white/10 rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <div>
+              <p className="text-white font-semibold text-base">Edit saved</p>
+              <p className="text-sm text-white/50 mt-0.5">Variant added to your gallery. What would you like to do next?</p>
+            </div>
+            <div className="space-y-2.5">
+              <button
+                onClick={() => { approveAsset(postEditVariant.id); setPostEditVariant(null); }}
+                className="w-full btn-primary flex items-center justify-center gap-2 py-3"
+              >
+                <Check className="w-4 h-4" />
+                Approve for scheduling
+              </button>
+              <button
+                onClick={() => {
+                  approveAsset(postEditVariant.id);
+                  setStagedAssets([postEditVariant]);
+                  setWorkflowStep('scheduling');
+                  setPostEditVariant(null);
+                }}
+                className="w-full btn-secondary flex items-center justify-center gap-2 py-3"
+              >
+                <CalendarPlus className="w-4 h-4" />
+                Schedule now
+              </button>
+              <button
+                onClick={() => setPostEditVariant(null)}
+                className="w-full text-sm text-white/40 hover:text-white/70 py-2 transition-colors"
+              >
+                Just save to gallery
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Video lightbox */}
       {previewVideo && (
