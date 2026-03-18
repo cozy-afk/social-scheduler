@@ -772,10 +772,10 @@ function ApprovedAssetsPanel({
           {assets.length > 0 && !linkMode && (
             <button
               onClick={onAutoSchedule}
-              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg font-semibold transition-all"
-              style={{ background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.4)', color: '#a78bfa' }}
+              className="flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-lg font-bold transition-all"
+              style={{ background: 'rgba(124,58,237,0.25)', border: '1px solid rgba(124,58,237,0.5)', color: '#c4b5fd' }}
             >
-              <CalendarDays className="w-3 h-3" />Auto
+              <CalendarDays className="w-3 h-3" />Auto-Fill
             </button>
           )}
           <Link href="/gallery" className="text-[10px] flex items-center gap-1 hover:text-violet-400 transition-colors"
@@ -1559,22 +1559,47 @@ export default function SchedulePage() {
   const handleAutoSchedule = useCallback(() => {
     if (!selectedModel) return;
     const groupedIds = new Set(panelGroups.flatMap((g) => g.assetIds));
-    const items: ScheduleItem[] = [
-      ...panelGroups.map((g) => ({
-        assetId: g.assetIds[0],
-        extraAssetIds: g.assetIds.slice(1),
-        isVideo: false,
-        isCarousel: true,
-      })),
-      ...approvedAssets
-        .filter((a) => !groupedIds.has(a.id))
-        .map((a) => ({
-          assetId: a.id,
-          isVideo: a.fileType === 'video',
-          isCarousel: false,
-        })),
-    ];
+
+    const carousels: ScheduleItem[] = panelGroups.map((g) => ({
+      assetId: g.assetIds[0],
+      extraAssetIds: g.assetIds.slice(1),
+      isVideo: false,
+      isCarousel: true,
+    }));
+
+    const singles = approvedAssets.filter((a) => !groupedIds.has(a.id));
+    const videos = singles
+      .filter((a) => a.fileType === 'video')
+      .map((a) => ({ assetId: a.id, isVideo: true, isCarousel: false }));
+    const images = singles
+      .filter((a) => a.fileType === 'image')
+      .map((a) => ({ assetId: a.id, isVideo: false, isCarousel: false }));
+
+    // Fisher-Yates shuffle within each type so same shots don't cluster
+    const shuffle = <T,>(arr: T[]): T[] => {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    };
+
+    const sv = shuffle(videos);
+    const si = shuffle(images);
+
+    // Interleave: 1 video → 2 images → 1 video → … so the feed looks varied
+    const interleaved: ScheduleItem[] = [];
+    let vi = 0, ii = 0;
+    while (vi < sv.length || ii < si.length) {
+      if (vi < sv.length) interleaved.push(sv[vi++]);
+      if (ii < si.length) interleaved.push(si[ii++]);
+      if (ii < si.length) interleaved.push(si[ii++]);
+    }
+
+    const items: ScheduleItem[] = [...carousels, ...interleaved];
     if (items.length === 0) return;
+
     const result = buildAutoSchedule(
       items,
       modelPosts,
@@ -1587,15 +1612,26 @@ export default function SchedulePage() {
 
   const confirmAutoSchedule = useCallback(() => {
     if (!autoSchedulePreview) return;
+    // Build lookup so we can populate real fileUrl / fileName from gallery
+    const assetLookup = new Map(galleryAssets.map((a) => [a.id, a]));
     const newPosts: Post[] = autoSchedulePreview.posts.map((p, i) => ({
       ...p,
       id: `auto-${Date.now()}-${i}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      assets: p.assets.map((asset, ai) => {
+        const gal = assetLookup.get(asset.fileName); // fileName stores assetId in buildAutoSchedule
+        return {
+          ...asset,
+          id: `asset-auto-${Date.now()}-${i}-${ai}`,
+          fileUrl: gal?.fileUrl ?? '',
+          fileName: gal?.fileName ?? asset.fileName,
+        };
+      }),
     }));
     setPosts([...posts, ...newPosts]);
     setAutoSchedulePreview(null);
-  }, [autoSchedulePreview, posts, setPosts]);
+  }, [autoSchedulePreview, posts, setPosts, galleryAssets]);
 
   // ─── Drop to timeline day (manual scheduling) ─────────────────────────────
   const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
@@ -2173,6 +2209,37 @@ export default function SchedulePage() {
                 ))}
               </div>
             </div>
+            {/* Thumbnail preview strip */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                Content preview
+              </p>
+              <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+                {autoSchedulePreview.posts.slice(0, 9).map((p, i) => {
+                  const assetId = p.assets[0]?.fileName;
+                  const asset = galleryAssets.find((a) => a.id === assetId);
+                  return (
+                    <div key={i} className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden"
+                      style={{ background: 'rgba(255,255,255,0.06)' }}>
+                      {asset?.fileType === 'image' ? (
+                        <img src={asset.thumbnailUrl ?? asset.fileUrl} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Film className="w-4 h-4 text-zinc-500" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {autoSchedulePreview.posts.length > 9 && (
+                  <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden flex items-center justify-center text-[10px] text-zinc-400"
+                    style={{ background: 'rgba(255,255,255,0.06)' }}>
+                    +{autoSchedulePreview.posts.length - 9}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="flex items-center gap-2 text-[10px] px-3 py-2 rounded-lg"
               style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>
               <Clock className="w-3 h-3 flex-shrink-0" />
