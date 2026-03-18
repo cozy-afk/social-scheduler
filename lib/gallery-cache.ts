@@ -61,12 +61,14 @@ export function touchCachedAssets(modelId: string) {
 export async function fetchGalleryAssets(
   s3Folder: string,
   etag: string | null = null,
-): Promise<{ assets: GalleryAsset[]; etag: string | null; notModified: boolean }> {
-  const headers: HeadersInit = etag ? { 'If-None-Match': etag } : {};
-  const res = await fetch(`/api/r2/gallery?modelFolder=${encodeURIComponent(s3Folder)}`, { headers });
+  cursor?: string,
+): Promise<{ assets: GalleryAsset[]; etag: string | null; notModified: boolean; nextCursor: string | null; total: number }> {
+  const headers: HeadersInit = etag && !cursor ? { 'If-None-Match': etag } : {};
+  const url = `/api/r2/gallery?modelFolder=${encodeURIComponent(s3Folder)}${cursor ? `&cursor=${cursor}` : ''}`;
+  const res = await fetch(url, { headers });
 
   if (res.status === 304) {
-    return { assets: [], etag, notModified: true };
+    return { assets: [], etag, notModified: true, nextCursor: null, total: 0 };
   }
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
@@ -75,7 +77,38 @@ export async function fetchGalleryAssets(
 
   const json = await res.json();
   const newEtag = res.headers.get('etag');
-  return { assets: json.assets as GalleryAsset[], etag: newEtag, notModified: false };
+  return {
+    assets: json.assets as GalleryAsset[],
+    etag: newEtag,
+    notModified: false,
+    nextCursor: json.nextCursor ?? null,
+    total: json.total ?? 0,
+  };
+}
+
+/**
+ * Fetch all pages of gallery assets for a model folder, appending to cache.
+ * Returns full set once complete.
+ */
+export async function fetchAllGalleryAssets(
+  s3Folder: string,
+  onPage: (batch: GalleryAsset[], total: number) => void,
+  etag: string | null = null,
+): Promise<{ allAssets: GalleryAsset[]; etag: string | null }> {
+  let cursor: string | undefined;
+  let firstEtag = etag;
+  const allAssets: GalleryAsset[] = [];
+
+  do {
+    const result = await fetchGalleryAssets(s3Folder, cursor ? null : firstEtag, cursor);
+    if (result.notModified) return { allAssets: [], etag: firstEtag };
+    if (!cursor) firstEtag = result.etag; // capture ETag from first page
+    allAssets.push(...result.assets);
+    onPage(result.assets, result.total);
+    cursor = result.nextCursor ?? undefined;
+  } while (cursor);
+
+  return { allAssets, etag: firstEtag };
 }
 
 /**

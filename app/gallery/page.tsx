@@ -12,7 +12,7 @@ import AutoPublisher from '@/components/AutoPublisher';
 import FeedPreviewPanel from '@/components/FeedPreviewPanel';
 import { GalleryAsset, CropRatio } from '@/types/models';
 import { calculateViralityScore, type ViralityAnalysis } from '@/lib/virality-analyzer';
-import { getCachedAssets, setCachedAssets, touchCachedAssets, fetchGalleryAssets } from '@/lib/gallery-cache';
+import { getCachedAssets, setCachedAssets, touchCachedAssets, fetchGalleryAssets, fetchAllGalleryAssets } from '@/lib/gallery-cache';
 import {
   Upload, Check, X, Film, Image as ImageIcon,
   HardDrive, Search, FolderOpen, Users,
@@ -394,13 +394,26 @@ export default function GalleryPage() {
           .finally(() => { if (!cancelled) setR2Refreshing(false); });
       }
     } else {
-      // Cache miss — full load with spinner
+      // Cache miss — progressive load: show first batch immediately, stream the rest
       setR2Loading(true);
-      fetchGalleryAssets(selectedModel.s3Folder, null)
-        .then(({ assets, etag }) => {
+      const accumulated: GalleryAsset[] = [];
+      fetchAllGalleryAssets(
+        selectedModel.s3Folder,
+        (batch) => {
           if (cancelled) return;
-          setCachedAssets(selectedModel.id, assets, etag);
-          setGalleryAssets(assets);
+          accumulated.push(...batch);
+          // After first page arrives, hide spinner and show assets
+          if (accumulated.length > 0) {
+            setR2Loading(false);
+            setGalleryAssets([...accumulated]);
+          }
+        },
+        null,
+      )
+        .then(({ allAssets, etag }) => {
+          if (cancelled) return;
+          setCachedAssets(selectedModel.id, allAssets, etag);
+          setGalleryAssets(allAssets);
         })
         .catch((err) => { if (!cancelled) setR2Error(err instanceof Error ? err.message : 'Unknown error'); })
         .finally(() => { if (!cancelled) setR2Loading(false); });
@@ -410,15 +423,26 @@ export default function GalleryPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedModelId]);
 
-  // Manual refresh — bypass cache
+  // Manual refresh — bypass cache, progressive
   const loadFromR2 = useCallback(async () => {
     if (!selectedModel?.s3Folder) return;
     setR2Loading(true);
     setR2Error(null);
+    const accumulated: GalleryAsset[] = [];
     try {
-      const { assets, etag } = await fetchGalleryAssets(selectedModel.s3Folder, null);
-      setCachedAssets(selectedModel.id, assets, etag);
-      setGalleryAssets(assets);
+      const { allAssets, etag } = await fetchAllGalleryAssets(
+        selectedModel.s3Folder,
+        (batch) => {
+          accumulated.push(...batch);
+          if (accumulated.length > 0) {
+            setR2Loading(false);
+            setGalleryAssets([...accumulated]);
+          }
+        },
+        null,
+      );
+      setCachedAssets(selectedModel.id, allAssets, etag);
+      setGalleryAssets(allAssets);
     } catch (err) {
       setR2Error(err instanceof Error ? err.message : 'Unknown error');
     } finally {

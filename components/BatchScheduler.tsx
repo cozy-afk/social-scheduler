@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { ChevronLeft, Calendar, Film, Zap, X, Check, Pencil, Globe, Image, BookOpen, FileText, AlertTriangle, Crop } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { GalleryAsset, PostType, Platform, TimeSlot } from '@/types/models';
@@ -295,6 +295,30 @@ export default function BatchScheduler() {
   // slotId → resize-target: open editor in crop mode for carousel resize
   const [resizingSlotId, setResizingSlotId] = useState<string | null>(null);
 
+  // Resizable left panel
+  const [panelWidth, setPanelWidth] = useState(256); // 256px = w-64 default
+  const isResizing = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    isResizing.current = true;
+    startX.current = e.clientX;
+    startWidth.current = panelWidth;
+    const onMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return;
+      const delta = ev.clientX - startX.current;
+      setPanelWidth(Math.max(160, Math.min(480, startWidth.current + delta)));
+    };
+    const onUp = () => {
+      isResizing.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [panelWidth]);
+
   // How many slots each asset has been assigned to
   const assetUsageCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -492,8 +516,8 @@ export default function BatchScheduler() {
       {/* Body */}
       <div className="flex-1 overflow-hidden flex gap-0">
         {/* Left: Assets */}
-        <div className="w-64 flex-shrink-0 border-r overflow-y-auto no-scrollbar p-4 flex flex-col gap-3"
-          style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'var(--bg-sidebar)' }}>
+        <div className="flex-shrink-0 border-r overflow-y-auto no-scrollbar p-4 flex flex-col gap-3"
+          style={{ width: panelWidth, borderColor: 'rgba(255,255,255,0.06)', background: 'var(--bg-sidebar)' }}>
           <p className="section-title">Assets ({assets.length})</p>
           {assets.length === 0 ? (
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No assets staged</p>
@@ -508,6 +532,14 @@ export default function BatchScheduler() {
             ))
           )}
         </div>
+
+        {/* Resize handle */}
+        <div
+          onMouseDown={handleResizeStart}
+          className="w-1 flex-shrink-0 cursor-col-resize hover:bg-violet-500/40 transition-colors active:bg-violet-500/60"
+          style={{ background: 'rgba(255,255,255,0.04)' }}
+          title="Drag to resize"
+        />
 
         {/* Right: Calendar slots */}
         <div className="flex-1 overflow-y-auto no-scrollbar p-6">
