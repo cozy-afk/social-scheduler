@@ -1312,17 +1312,16 @@ export default function GalleryPage() {
       {showCreatePostModal && <CreatePostModal />}
 
       {/* ── Workflow overlays ── */}
-      {workflowStep === 'staging' && (
-        <StagingView onEditVariant={handleEditVariant} />
-      )}
+      {workflowStep === 'staging' && <StagingView />}
 
       {workflowStep === 'editing' && editingTarget && (() => {
         const sa = stagedAssets.find((s) => s.asset.id === editingTarget.assetId);
         if (!sa) return null;
-        const existingVariant = sa.variants.find((v) => v.ratio === editingTarget.ratio);
+        // Use editResult if available, otherwise use original asset
+        const url = sa.editResult?.url || sa.asset.fileUrl;
         const item: EditableImage = {
           id: sa.asset.id,
-          url: existingVariant?.editResult?.url || sa.asset.fileUrl,
+          url,
           name: sa.asset.fileName,
           type: sa.asset.fileType,
         };

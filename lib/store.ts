@@ -3,11 +3,17 @@ import {
   Model, User, Post, Caption, GalleryAsset, VAMagicLink,
   PostReference, StagedAsset, StagedVariant, WorkflowStep, EditingTarget, CropRatio,
   Agency, ResearchGroup,
+  // Editing workflow types
+  AssetVariant, Platform, CaptionStyle,
 } from '@/types/models';
+import { ImageEditorResult, ImageEditorResult as EditorResultType } from '@/components/ImageEditor';
 import { S3Config, MetaConfig, FanvueConfig } from '@/types/integrations';
 
 // Re-export integration types for convenience
 export type { S3Config, MetaConfig, FanvueConfig } from '@/types/integrations';
+
+// Alias to avoid conflict with utils.ImageEditorResult
+type StagingEditResult = EditorResultType;
 
 /** Default crop ratios for staging workflow */
 const DEFAULT_CROP_RATIOS: { ratio: CropRatio; edited: false }[] = [
@@ -102,6 +108,19 @@ interface AppState {
   clearStaging: () => void;
   editingTarget: EditingTarget | null;
   setEditingTarget: (target: EditingTarget | null) => void;
+
+  // NEW: Editing workflow actions
+  updateStagedAssetEdit: (assetId: string, editResult: ImageEditorResult) => void;
+  clearStagedAssetEdit: (assetId: string) => void;
+  createAssetVariant: (assetId: string, platform: Platform, config: {
+    editedUrl?: string;
+    editResult?: any;
+    imageCaption?: string;
+    captionStyle?: CaptionStyle;
+  }) => void;
+  removeAssetVariant: (assetId: string, variantId: string) => void;
+  setPlatformCaption: (assetId: string, platform: Platform, config: { text: string; style: CaptionStyle }) => void;
+  clearPlatformCaption: (assetId: string, platform: Platform) => void;
 
   // Research Groups
   researchGroups: ResearchGroup[];
@@ -307,7 +326,8 @@ export const useStore = create<AppState>((set) => ({
     set({
       stagedAssets: assets.map((asset) => ({
         asset,
-        variants: DEFAULT_CROP_RATIOS.map((v) => ({ ...v })),
+        variants: [], // Platform-specific variants (created when scheduling)
+        ratioVariants: DEFAULT_CROP_RATIOS.map((v) => ({ ...v })), // Legacy: kept for backward compatibility
         skipped: false,
       })),
       workflowStep: 'staging',
@@ -318,7 +338,7 @@ export const useStore = create<AppState>((set) => ({
         sa.asset.id === assetId
           ? {
               ...sa,
-              variants: sa.variants.map((v) =>
+              ratioVariants: (sa.ratioVariants || []).map((v) =>
                 v.ratio === ratio ? { ...v, edited: true, editResult: result } : v
               ),
             }
@@ -334,6 +354,80 @@ export const useStore = create<AppState>((set) => ({
   clearStaging: () => set({ stagedAssets: [], workflowStep: 'gallery', editingTarget: null }),
   editingTarget: null,
   setEditingTarget: (target) => set({ editingTarget: target }),
+
+  // NEW: Editing workflow actions
+  updateStagedAssetEdit: (assetId, editResult: StagingEditResult) =>
+    set((state) => ({
+      stagedAssets: state.stagedAssets.map((sa) =>
+        sa.asset.id === assetId
+          ? { ...sa, editResult, variants: [] } // Clear old variants when editing changes
+          : sa
+      ),
+    })),
+  clearStagedAssetEdit: (assetId) =>
+    set((state) => ({
+      stagedAssets: state.stagedAssets.map((sa) =>
+        sa.asset.id === assetId
+          ? { ...sa, editResult: undefined }
+          : sa
+      ),
+    })),
+  createAssetVariant: (assetId, platform, config) =>
+    set((state) => {
+      const variant: AssetVariant = {
+        id: `variant-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        originalAssetId: assetId,
+        platform,
+        editedUrl: config.editedUrl,
+        editResult: config.editResult,
+        imageCaption: config.imageCaption,
+        captionStyle: config.captionStyle,
+        createdAt: new Date().toISOString(),
+      };
+      return {
+        stagedAssets: state.stagedAssets.map((sa) =>
+          sa.asset.id === assetId
+            ? { ...sa, variants: [...(sa.variants || []), variant] }
+            : sa
+        ),
+      };
+    }),
+  removeAssetVariant: (assetId, variantId) =>
+    set((state) => ({
+      stagedAssets: state.stagedAssets.map((sa) =>
+        sa.asset.id === assetId
+          ? { ...sa, variants: sa.variants.filter((v) => v.id !== variantId) }
+          : sa
+      ),
+    })),
+  setPlatformCaption: (assetId, platform, config) =>
+    set((state) => ({
+      stagedAssets: state.stagedAssets.map((sa) =>
+        sa.asset.id === assetId
+          ? {
+              ...sa,
+              platformCaptions: {
+                ...(sa.platformCaptions || {}),
+                [platform]: config,
+              },
+            }
+          : sa
+      ),
+    })),
+  clearPlatformCaption: (assetId, platform) =>
+    set((state) => {
+      const newCaptions = { ...state.stagedAssets.find((sa) => sa.asset.id === assetId)?.platformCaptions };
+      if (newCaptions) {
+        delete newCaptions[platform];
+      }
+      return {
+        stagedAssets: state.stagedAssets.map((sa) =>
+          sa.asset.id === assetId
+            ? { ...sa, platformCaptions: newCaptions }
+            : sa
+        ),
+      };
+    }),
 
   // Research Groups
   researchGroups: [],

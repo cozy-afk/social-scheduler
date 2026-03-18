@@ -217,6 +217,73 @@ export interface PostReference {
 export type CropRatio = '1:1' | '4:5' | '9:16';
 export type WorkflowStep = 'gallery' | 'staging' | 'editing' | 'scheduling';
 
+// ─── TikTok Native Text Styles ─────────────────────────────────────────────────
+
+export type TikTokFontFamily =
+  | 'SF-Pro-Display-Bold'
+  | 'SF-Pro-Text-Semibold'
+  | 'SF-Pro-Text-Regular'
+  | 'Roboto-Bold'
+  | 'Roboto-Medium'
+  | 'Roboto-Regular';
+
+export type TikTokTextPosition =
+  | 'top'
+  | 'top-left'
+  | 'top-right'
+  | 'center'
+  | 'center-left'
+  | 'center-right'
+  | 'bottom'
+  | 'bottom-left'
+  | 'bottom-right'
+  | 'custom';
+
+export interface CaptionStyle {
+  fontFamily: TikTokFontFamily;
+  fontSize: number;        // 12-64 px, scaled to image
+  color: string;          // Hex color
+  fontWeight: '400' | '500' | '600' | '700' | '800';
+  lineHeight: number;       // 1.0-2.0
+  letterSpacing: number;   // -1 to 5 px
+  textAlign: 'left' | 'center' | 'right';
+  position: TikTokTextPosition;
+  customPosition?: { x: number; y: number }; // 0-100% when position is 'custom'
+  shadow: {
+    enabled: boolean;
+    blur: number;        // 0-20 px
+    offsetX: number;     // -10 to 10 px
+    offsetY: number;     // -10 to 10 px
+    color: string;      // Usually black or white
+  };
+  padding: {
+    enabled: boolean;
+    topBottom: number;  // 0-20 px
+    leftRight: number;  // 0-30 px
+  };
+  background?: {
+    enabled: boolean;
+    color: string;      // Usually semi-transparent
+    borderRadius: number; // 0-20 px
+  };
+}
+
+// ─── Asset Variants (Platform-specific versions) ────────────────────────────
+
+export interface AssetVariant {
+  id: string;
+  originalAssetId: string;        // Reference to source GalleryAsset
+  platform: Platform;             // Target platform
+  editedUrl?: string;             // Edited version URL (data URL or stored)
+  editResult?: any;              // Editor state for re-editing (from ImageEditor)
+  imageCaption?: string;          // Text to overlay for this platform
+  captionStyle?: CaptionStyle;     // Font, color, position, etc.
+  createdAt: string;
+}
+
+// Note: FilterState, OverlayItem, ImageEditorResult are exported from types/utils.ts
+// to avoid conflicts with the existing definitions there.
+
 export interface StagedVariantEditResult {
   url: string;
   namedFilter: string;
@@ -230,10 +297,26 @@ export interface StagedVariant {
   editResult?: StagedVariantEditResult;
 }
 
+// Updated StagedAsset with editing state and platform variants
 export interface StagedAsset {
   asset: GalleryAsset;
-  variants: StagedVariant[];
   skipped: boolean;
+
+  // NEW: Editing state from ImageEditor (using ImageEditorResult type)
+  editResult?: any; // Using any to handle ImageEditor.FilterState vs utils.FilterState differences
+
+  // NEW: Platform-specific variants (created when scheduling)
+  variants: AssetVariant[];
+
+  // NEW: Per-platform caption overlays (for TikTok slideshow workflow)
+  // Maps platform ID to caption text + style configuration
+  platformCaptions?: Partial<Record<Platform, {
+    text: string;
+    style: CaptionStyle;
+  }>>;
+
+  // Legacy: Ratio-based variants (keeping for backward compatibility)
+  ratioVariants?: StagedVariant[];
 }
 
 export interface EditingTarget {
