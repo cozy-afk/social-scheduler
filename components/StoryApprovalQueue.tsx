@@ -7,7 +7,7 @@ import { CheckCircle, XCircle, RefreshCw, Image as ImageIcon } from 'lucide-reac
 import { InstagramIcon, TikTokIcon } from './PlatformIcons';
 
 export default function StoryApprovalQueue() {
-  const { models, selectedModelId, posts, updatePost } = useStore();
+  const { models, selectedModelId, posts, updatePost, addPost } = useStore();
   const [isGenerating, setIsGenerating] = useState(false);
 
   const selectedModel = models.find((m) => m.id === selectedModelId);
@@ -47,11 +47,13 @@ export default function StoryApprovalQueue() {
         }),
       });
       const data = await response.json();
-      if (data.success) {
-        alert(`Generated ${data.count} stories!`);
+      if (data.success && data.data?.stories) {
+        for (const story of data.data.stories) {
+          addPost(story);
+        }
       }
     } catch {
-      alert('Failed to generate stories');
+      console.error('Failed to generate stories');
     } finally {
       setIsGenerating(false);
     }
@@ -116,21 +118,30 @@ export default function StoryApprovalQueue() {
                   className="card overflow-hidden border-yellow-500/30"
                 >
                   {/* Story Preview */}
-                  <div className="relative bg-slate-800 aspect-[9/16]">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center p-4">
-                        <ImageIcon className="w-10 h-10 mx-auto mb-2 text-slate-600" />
-                        <p className="text-slate-400 text-sm">Story Preview</p>
-                        <p className="text-slate-500 text-xs mt-1">
-                          Crop: {cropConfig?.strategy || 'center'}
-                        </p>
-                        {cropConfig?.position && (
-                          <p className="text-slate-600 text-xs mt-1 font-mono">
-                            {cropConfig.position.width}×{cropConfig.position.height}
-                          </p>
-                        )}
+                  <div className="relative bg-slate-800 aspect-[9/16] overflow-hidden">
+                    {asset.fileUrl ? (
+                      <img
+                        src={asset.fileUrl}
+                        alt="Story preview"
+                        className="w-full h-full object-cover"
+                        style={cropConfig?.position ? {
+                          objectPosition: `${(cropConfig.position.x / (asset.originalDimensions?.width ?? 1)) * 100}% ${(cropConfig.position.y / (asset.originalDimensions?.height ?? 1)) * 100}%`,
+                        } : undefined}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="text-center p-4">
+                          <ImageIcon className="w-10 h-10 mx-auto mb-2 text-slate-600" />
+                          <p className="text-slate-400 text-sm">Story Preview</p>
+                        </div>
                       </div>
-                    </div>
+                    )}
+                    {/* Crop strategy badge */}
+                    {cropConfig?.strategy && (
+                      <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded capitalize">
+                        {cropConfig.strategy}
+                      </div>
+                    )}
                     {/* Category badge */}
                     <div className="absolute top-3 right-3 text-lg">
                       {getCategoryEmoji(story.storyCategory)}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useStore } from '@/lib/store';
-import { Agency } from '@/types/models';
+import { Agency, User } from '@/types/models';
 import {
   Lock,
   Building2,
@@ -18,9 +18,13 @@ import {
   ExternalLink,
   Clock,
   BarChart2,
+  Users,
+  Shield,
+  AlertCircle,
 } from 'lucide-react';
 import { format, isToday, parseISO } from 'date-fns';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, FanvueIcon } from '@/components/PlatformIcons';
+import { mockVAUsers } from '@/lib/mockData';
 
 // ─── Local Types ──────────────────────────────────────────────────────────────
 
@@ -29,7 +33,7 @@ interface AgencyWithEmail extends Agency {
   email?: string;
 }
 
-type TabId = 'agencies' | 'ai' | 'status' | 'posted';
+type TabId = 'agencies' | 'ai' | 'status' | 'posted' | 'users';
 
 type AiProvider = 'anthropic' | 'openai' | 'gemini' | 'grok';
 
@@ -771,10 +775,140 @@ function PostedTodayTab() {
   );
 }
 
+// ─── User Approval Tab ────────────────────────────────────────────────────────
+
+const ROLE_OPTIONS = [
+  { value: 'va', label: 'VA' },
+  { value: 'planner', label: 'Planner' },
+  { value: 'agency', label: 'Agency' },
+] as const;
+
+function UserApprovalTab() {
+  const { users, setUsers, agencies } = useStore();
+  const [pendingList, setPendingList] = useState<User[]>([]);
+  const [roleMap, setRoleMap] = useState<Record<string, string>>({});
+  const [agencyMap, setAgencyMap] = useState<Record<string, string>>({});
+  const [processed, setProcessed] = useState<string[]>([]);
+
+  useEffect(() => {
+    // Seed with mock VA users if no real pending users
+    const pending = users.filter((u) => u.approvalStatus === 'pending');
+    if (pending.length === 0 && mockVAUsers.length > 0) {
+      const mocked = mockVAUsers.map((u) => ({ ...u, approvalStatus: 'pending' as const }));
+      setPendingList(mocked);
+    } else {
+      setPendingList(pending);
+    }
+  }, [users]);
+
+  const handle = (userId: string, status: 'approved' | 'denied') => {
+    const role = (roleMap[userId] || 'va') as User['role'];
+    const agencyId = agencyMap[userId] || agencies[0]?.id;
+
+    // Update local pending list
+    setPendingList((prev) => prev.filter((u) => u.id !== userId));
+    setProcessed((prev) => [...prev, userId]);
+
+    // Apply to store
+    const update: Partial<User> = { approvalStatus: status, updatedAt: new Date().toISOString() };
+    if (status === 'approved') {
+      update.role = role;
+      if (agencyId) update.agencyId = agencyId;
+    }
+    setUsers(users.map((u) => (u.id === userId ? { ...u, ...update } : u)));
+  };
+
+  if (pendingList.length === 0 && processed.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+        <Shield className="w-12 h-12 text-slate-700" />
+        <p className="text-slate-400 font-medium">No pending approvals</p>
+        <p className="text-slate-600 text-sm">New users who sign in via Discord will appear here</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm text-slate-400 bg-slate-800/60 border border-slate-700/40 rounded-lg px-4 py-2.5">
+        <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+        Users who sign in via Discord OAuth appear here. Approve to grant access; deny to block.
+      </div>
+
+      {processed.length > 0 && (
+        <div className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
+          {processed.length} user{processed.length !== 1 ? 's' : ''} processed this session.
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {pendingList.map((user) => (
+          <div key={user.id} className="card p-4">
+            <div className="flex items-start gap-4 flex-wrap">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 bg-gradient-to-br from-violet-600 to-purple-700 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                  {user.name?.[0]?.toUpperCase() ?? '?'}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">{user.name || 'Unknown'}</p>
+                  <p className="text-xs text-slate-400 truncate">{user.email || 'No email'}</p>
+                  <p className="text-xs text-slate-500">
+                    Joined {user.createdAt ? format(parseISO(user.createdAt), 'MMM d, yyyy') : 'recently'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Role selector */}
+                <select
+                  value={roleMap[user.id] || 'va'}
+                  onChange={(e) => setRoleMap((prev) => ({ ...prev, [user.id]: e.target.value }))}
+                  className="input-dark text-xs py-1.5 pr-7 w-24"
+                >
+                  {ROLE_OPTIONS.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+
+                {/* Agency selector */}
+                {agencies.length > 0 && (
+                  <select
+                    value={agencyMap[user.id] || agencies[0]?.id || ''}
+                    onChange={(e) => setAgencyMap((prev) => ({ ...prev, [user.id]: e.target.value }))}
+                    className="input-dark text-xs py-1.5 pr-7 w-36"
+                  >
+                    {agencies.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                )}
+
+                <button
+                  onClick={() => handle(user.id, 'approved')}
+                  className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <Check className="w-3.5 h-3.5" /> Approve
+                </button>
+                <button
+                  onClick={() => handle(user.id, 'denied')}
+                  className="flex items-center gap-1.5 bg-red-600/80 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" /> Deny
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'agencies', label: 'Agencies', icon: <Building2 className="w-4 h-4" /> },
+  { id: 'users', label: 'User Approvals', icon: <Users className="w-4 h-4" /> },
   { id: 'ai', label: 'AI Config', icon: <Cpu className="w-4 h-4" /> },
   { id: 'status', label: 'System Status', icon: <Activity className="w-4 h-4" /> },
   { id: 'posted', label: 'Posted Today', icon: <CheckCircle2 className="w-4 h-4" /> },
@@ -819,6 +953,7 @@ export default function AdminPage() {
         {/* Tab content */}
         <div>
           {activeTab === 'agencies' && <AgenciesTab />}
+          {activeTab === 'users' && <UserApprovalTab />}
           {activeTab === 'ai' && <AiConfigTab />}
           {activeTab === 'status' && <SystemStatusTab />}
           {activeTab === 'posted' && <PostedTodayTab />}

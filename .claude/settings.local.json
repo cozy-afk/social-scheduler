@@ -12,7 +12,12 @@
       "Skill(update-config)",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__navigate_page",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests",
-      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_pages"
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_pages",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "mcp__pal-coding__chat",
+      "mcp__pal-coding__listmodels",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__get_console_message",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__handle_dialog"
     ],
     "defaultMode": "acceptEdits"
   },
