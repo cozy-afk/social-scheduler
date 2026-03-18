@@ -10,7 +10,7 @@ import {
   TrendingUp, CalendarDays, Play, Music2, Grid3X3, Clapperboard,
   Copy, Search, ArrowLeft, Plus, Wifi, Signal, Battery,
   BookMarked, UserCheck, Images, Eye, Clock, AlertTriangle,
-  Layers, Smartphone,
+  Layers, Smartphone, Link2, X, GripVertical,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -628,26 +628,124 @@ function XProfilePage({ modelName, posts }: { modelName: string; posts: Post[] }
 
 // ─── Left Panel: Approved Assets ─────────────────────────────────────────────
 
+interface AssetCarouselGroup {
+  id: string;
+  assetIds: string[];
+}
+
 function ApprovedAssetsPanel({
   assets, selectedId, onSelect, onDragStart,
 }: {
   assets: GalleryAsset[]; selectedId: string | null;
   onSelect: (id: string) => void; onDragStart: (id: string) => void;
 }) {
+  const [panelWidth, setPanelWidth] = useState(248);
+  const [linkMode, setLinkMode] = useState(false);
+  const [selectedForGroup, setSelectedForGroup] = useState<Set<string>>(new Set());
+  const [groups, setGroups] = useState<AssetCarouselGroup[]>([]);
+  const resizeDragRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  // ── Resize handle ─────────────────────────────────────────────────────────
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizeDragRef.current = { startX: e.clientX, startW: panelWidth };
+    const onMove = (ev: MouseEvent) => {
+      if (!resizeDragRef.current) return;
+      const delta = ev.clientX - resizeDragRef.current.startX;
+      setPanelWidth(Math.max(180, Math.min(520, resizeDragRef.current.startW + delta)));
+    };
+    const onUp = () => {
+      resizeDragRef.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [panelWidth]);
+
+  // ── Carousel linking ──────────────────────────────────────────────────────
+  const toggleForGroup = useCallback((id: string) => {
+    setSelectedForGroup((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const createCarousel = useCallback(() => {
+    if (selectedForGroup.size < 2) return;
+    setGroups((prev) => [...prev, { id: `g-${Date.now()}`, assetIds: Array.from(selectedForGroup) }]);
+    setSelectedForGroup(new Set());
+    setLinkMode(false);
+  }, [selectedForGroup]);
+
+  const ungroupCarousel = useCallback((groupId: string) => {
+    setGroups((prev) => prev.filter((g) => g.id !== groupId));
+  }, []);
+
+  const groupedAssetIds = useMemo(() => new Set(groups.flatMap((g) => g.assetIds)), [groups]);
+  const ungroupedAssets = useMemo(() => assets.filter((a) => !groupedAssetIds.has(a.id)), [assets, groupedAssetIds]);
+
+  const cols = Math.max(2, Math.floor((panelWidth - 24) / 108));
+
+  const aspectLabel = (ar?: number) => {
+    if (!ar) return '—';
+    if (Math.abs(ar - 0.5625) < 0.03) return '9:16';
+    if (Math.abs(ar - 0.8) < 0.03) return '4:5';
+    return '1:1';
+  };
+
   return (
-    <aside className="flex flex-col flex-shrink-0 overflow-hidden rounded-xl"
-      style={{ width: 248, background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
-      <div className="px-4 py-3 flex items-center justify-between flex-shrink-0"
+    <aside className="relative flex flex-col flex-shrink-0 overflow-hidden rounded-xl"
+      style={{ width: panelWidth, background: 'var(--bg-card)', border: `1px solid ${linkMode ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.07)'}`, transition: 'border-color 0.2s' }}>
+
+      {/* Header */}
+      <div className="px-3 py-3 flex items-center justify-between flex-shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div>
           <p className="text-sm font-bold text-white">Approved</p>
-          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{assets.length} assets ready</p>
+          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+            {assets.length} assets · {groups.length} carousel{groups.length !== 1 ? 's' : ''}
+          </p>
         </div>
-        <Link href="/gallery" className="text-[10px] flex items-center gap-1 hover:text-violet-400 transition-colors"
-          style={{ color: 'var(--text-muted)' }}>
-          <ExternalLink className="w-3 h-3" />Gallery
-        </Link>
+        <div className="flex items-center gap-1.5">
+          {assets.length >= 2 && (
+            <button
+              onClick={() => { setLinkMode((v) => !v); setSelectedForGroup(new Set()); }}
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg transition-all font-semibold"
+              style={{
+                background: linkMode ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.06)',
+                border: `1px solid ${linkMode ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                color: linkMode ? '#fbbf24' : 'var(--text-muted)',
+              }}
+            >
+              <Link2 className="w-3 h-3" />
+              {linkMode ? 'Cancel' : 'Link'}
+            </button>
+          )}
+          <Link href="/gallery" className="text-[10px] flex items-center gap-1 hover:text-violet-400 transition-colors"
+            style={{ color: 'var(--text-muted)' }}>
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        </div>
       </div>
+
+      {/* Link mode banner */}
+      {linkMode && (
+        <div className="flex-shrink-0 px-3 py-2 flex items-center justify-between"
+          style={{ background: 'rgba(251,191,36,0.07)', borderBottom: '1px solid rgba(251,191,36,0.15)' }}>
+          <p className="text-[10px] font-semibold" style={{ color: '#fbbf24' }}>
+            Select {selectedForGroup.size < 2 ? `${2 - selectedForGroup.size} more` : `${selectedForGroup.size} selected`} to link carousel
+          </p>
+          {selectedForGroup.size >= 2 && (
+            <button onClick={createCarousel}
+              className="text-[10px] font-bold px-2 py-1 rounded-lg"
+              style={{ background: 'rgba(251,191,36,0.25)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.4)' }}>
+              Create ({selectedForGroup.size})
+            </button>
+          )}
+        </div>
+      )}
 
       {assets.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 px-5 py-10 text-center">
@@ -660,39 +758,122 @@ function ApprovedAssetsPanel({
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-3 no-scrollbar">
-          <div className="grid grid-cols-2 gap-2">
-            {assets.map((asset) => (
-              <div
-                key={asset.id}
-                draggable
-                onClick={() => onSelect(asset.id)}
-                onDragStart={() => onDragStart(asset.id)}
-                className="relative aspect-square rounded-lg overflow-hidden cursor-grab active:cursor-grabbing transition-all"
-                style={{
-                  border: `2px solid ${selectedId === asset.id ? 'rgba(124,58,237,0.8)' : 'rgba(255,255,255,0.08)'}`,
-                  boxShadow: selectedId === asset.id ? '0 0 12px rgba(124,58,237,0.3)' : 'none',
-                }}
-              >
-                <img src={asset.fileUrl} alt={asset.fileName} className="w-full h-full object-cover" draggable={false} />
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)' }} />
-                {asset.fileType === 'video' && (
-                  <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center">
-                    <Play className="w-2.5 h-2.5 text-white fill-white" />
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+
+            {/* Carousel groups */}
+            {groups.map((group) => {
+              const groupAssets = group.assetIds
+                .map((id) => assets.find((a) => a.id === id))
+                .filter((a): a is GalleryAsset => !!a);
+              const firstAsset = groupAssets[0];
+              return (
+                <div key={group.id} draggable
+                  onDragStart={() => onDragStart(firstAsset?.id ?? group.assetIds[0])}
+                  className="relative aspect-square rounded-lg overflow-hidden cursor-grab active:cursor-grabbing"
+                  style={{ border: '2px solid rgba(251,191,36,0.6)', boxShadow: '0 0 10px rgba(251,191,36,0.2)' }}>
+                  {/* 2×2 grid of thumbnails */}
+                  <div className="grid grid-cols-2 h-full gap-px bg-black">
+                    {groupAssets.slice(0, 4).map((a, i) => (
+                      <div key={a.id} className="relative overflow-hidden">
+                        <img src={a.fileUrl} className="w-full h-full object-cover" alt="" draggable={false} />
+                        {i === 3 && groupAssets.length > 4 && (
+                          <div className="absolute inset-0 flex items-center justify-center"
+                            style={{ background: 'rgba(0,0,0,0.65)' }}>
+                            <span className="text-white text-xs font-bold">+{groupAssets.length - 3}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {/* Fill empty slots */}
+                    {groupAssets.length === 1 && [1, 2, 3].map((i) => (
+                      <div key={i} className="bg-zinc-900" />
+                    ))}
+                    {groupAssets.length === 2 && [1].map((i) => (
+                      <div key={i} className="bg-zinc-900 col-span-1 row-span-2" />
+                    ))}
                   </div>
-                )}
-                <div className="absolute bottom-1.5 left-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded"
-                  style={{ background: 'rgba(0,0,0,0.7)', color: '#ccc' }}>
-                  {asset.aspectRatio ? (Math.abs(asset.aspectRatio - 0.5625) < 0.03 ? '9:16' : Math.abs(asset.aspectRatio - 0.8) < 0.03 ? '4:5' : '1:1') : '—'}
+                  {/* Carousel badge */}
+                  <div className="absolute top-1.5 right-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded"
+                    style={{ background: 'rgba(251,191,36,0.9)', color: '#000' }}>
+                    {groupAssets.length} imgs
+                  </div>
+                  {/* Ungroup */}
+                  <button onClick={(e) => { e.stopPropagation(); ungroupCarousel(group.id); }}
+                    className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full flex items-center justify-center"
+                    style={{ background: 'rgba(239,68,68,0.85)' }}>
+                    <X className="w-3 h-3 text-white" />
+                  </button>
+                  <div className="absolute inset-0 hover:bg-amber-400/5 transition-colors" />
                 </div>
-                <div className="absolute inset-0 hover:bg-violet-500/10 transition-colors rounded-lg" />
-              </div>
-            ))}
+              );
+            })}
+
+            {/* Ungrouped single assets */}
+            {ungroupedAssets.map((asset) => {
+              const isSelected = selectedForGroup.has(asset.id);
+              return (
+                <div
+                  key={asset.id}
+                  draggable={!linkMode}
+                  onClick={() => linkMode ? toggleForGroup(asset.id) : onSelect(asset.id)}
+                  onDragStart={() => !linkMode && onDragStart(asset.id)}
+                  className="relative aspect-square rounded-lg overflow-hidden transition-all"
+                  style={{
+                    cursor: linkMode ? 'pointer' : 'grab',
+                    border: `2px solid ${
+                      isSelected ? 'rgba(251,191,36,0.8)' :
+                      selectedId === asset.id ? 'rgba(124,58,237,0.8)' :
+                      'rgba(255,255,255,0.08)'
+                    }`,
+                    boxShadow: isSelected ? '0 0 12px rgba(251,191,36,0.3)' :
+                      selectedId === asset.id ? '0 0 12px rgba(124,58,237,0.3)' : 'none',
+                  }}>
+                  <img src={asset.fileUrl} alt={asset.fileName}
+                    className="w-full h-full object-cover" draggable={false} />
+                  <div className="absolute inset-0"
+                    style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)' }} />
+                  {asset.fileType === 'video' && (
+                    <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center">
+                      <Play className="w-2.5 h-2.5 text-white fill-white" />
+                    </div>
+                  )}
+                  {/* Link mode checkbox */}
+                  {linkMode && (
+                    <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
+                      style={{
+                        background: isSelected ? 'rgba(251,191,36,0.9)' : 'rgba(0,0,0,0.6)',
+                        border: '1.5px solid rgba(251,191,36,0.6)',
+                      }}>
+                      {isSelected && <CheckCircle2 className="w-3 h-3 text-black" />}
+                    </div>
+                  )}
+                  <div className="absolute bottom-1.5 left-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded"
+                    style={{ background: 'rgba(0,0,0,0.7)', color: '#ccc' }}>
+                    {aspectLabel(asset.aspectRatio)}
+                  </div>
+                  <div className="absolute inset-0 hover:bg-violet-500/10 transition-colors rounded-lg" />
+                </div>
+              );
+            })}
           </div>
-          <p className="text-[9px] text-center mt-3" style={{ color: 'var(--text-muted)' }}>
-            Drag assets onto the grid →
-          </p>
+
+          {!linkMode && assets.length > 0 && (
+            <p className="text-[9px] text-center mt-3" style={{ color: 'var(--text-muted)' }}>
+              Drag onto grid · Use Link to group carousels
+            </p>
+          )}
         </div>
       )}
+
+      {/* Resize handle */}
+      <div
+        onMouseDown={handleResizeMouseDown}
+        className="absolute top-0 right-0 bottom-0 w-2 flex items-center justify-center group cursor-col-resize z-10"
+        style={{ background: 'transparent' }}
+      >
+        <div className="w-0.5 h-10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ background: 'rgba(124,58,237,0.6)' }} />
+      </div>
     </aside>
   );
 }
