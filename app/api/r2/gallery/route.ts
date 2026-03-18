@@ -132,7 +132,9 @@ export async function GET(req: NextRequest) {
         const thumbUrl = `/api/r2/thumb?key=${encodeURIComponent(obj.key)}`;
 
         return {
-          id: uuid,
+          // Scope id to model folder so assets from different models never share
+          // the same React key — prevents VideoThumbnail state leaking between models
+          id: `${safeFolder}-${uuid}`,
           fileName,
           fileUrl,
           fileType,
