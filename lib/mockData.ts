@@ -306,7 +306,7 @@ const generatePostsForDay = (date: Date, modelId: string, partial = false): Post
     scheduledTime: `${dateStr}T${slot.time}:00`,
     status: 'scheduled' as const,
     description: 'Scheduled post 🔥',
-    assets: [{ id: `asset-${dateStr}-${idx}`, postId: `post-${dateStr}-${idx}`, fileUrl: '/demo-image.jpg', fileName: 'photo.jpg', fileType: 'image' as const, order: 1 }],
+    assets: [{ id: `asset-${dateStr}-${idx}`, postId: `post-${dateStr}-${idx}`, fileUrl: R2P(slot.postType.includes('reel') ? '[MODELS]/LOKI/loki clips/068facf0-412d-41f0-8e40-532e3e0757d1/output (15).mp4' : '[MODELS]/LOKI/pics/026db123-be8e-4ecb-93ee-894bfebbf37d/l0ki_112.png'), fileName: slot.postType.includes('reel') ? 'output (15).mp4' : 'l0ki_112.png', fileType: slot.postType.includes('reel') ? 'video' as const : 'image' as const, order: 1 }],
     assignedVaId: 'va-1',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -315,22 +315,25 @@ const generatePostsForDay = (date: Date, modelId: string, partial = false): Post
 
 // ─── Celia Gallery Assets ─────────────────────────────────────────────────────
 // 3 base videos (9:16 reels) + 8 images (carousels + threads)
-// fileUrl uses /demo-* placeholders; real URLs come from R2 at runtime.
+// fileUrl points to real R2 keys via the /api/r2/proxy route (auth-gated, cached 1h).
+// The gallery page replaces these with presigned URLs fetched from R2 at runtime.
+
+const R2P = (key: string) => `/api/r2/proxy?key=${encodeURIComponent(key)}`;
 
 export const mockCeliaGalleryAssets: GalleryAsset[] = [
-  // Videos — 9:16 (reels)
-  { id: 'celia-vid-1', fileName: 'reel_outdoor.mp4',  fileUrl: '/demo-video.mp4', thumbnailUrl: '/demo-image.jpg', fileType: 'video', aspectRatio: 0.5625, width: 1080, height: 1920, source: 's3', s3Key: '[MODELS]/CELIA/reel_outdoor.mp4',  uploadedAt: new Date().toISOString() },
-  { id: 'celia-vid-2', fileName: 'reel_bedroom.mp4',  fileUrl: '/demo-video.mp4', thumbnailUrl: '/demo-image.jpg', fileType: 'video', aspectRatio: 0.5625, width: 1080, height: 1920, source: 's3', s3Key: '[MODELS]/CELIA/reel_bedroom.mp4',  uploadedAt: new Date().toISOString() },
-  { id: 'celia-vid-3', fileName: 'reel_studio.mp4',   fileUrl: '/demo-video.mp4', thumbnailUrl: '/demo-image.jpg', fileType: 'video', aspectRatio: 0.5625, width: 1080, height: 1920, source: 's3', s3Key: '[MODELS]/CELIA/reel_studio.mp4',   uploadedAt: new Date().toISOString() },
-  // Images — square (1:1) and portrait (4:5) for carousels + threads
-  { id: 'celia-img-1', fileName: 'photo_beach_1.jpg', fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 1.0,    width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/photo_beach_1.jpg', uploadedAt: new Date().toISOString() },
-  { id: 'celia-img-2', fileName: 'photo_beach_2.jpg', fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 1.0,    width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/photo_beach_2.jpg', uploadedAt: new Date().toISOString() },
-  { id: 'celia-img-3', fileName: 'photo_beach_3.jpg', fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 1.0,    width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/photo_beach_3.jpg', uploadedAt: new Date().toISOString() },
-  { id: 'celia-img-4', fileName: 'photo_mirror_1.jpg',fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 0.8,    width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/photo_mirror_1.jpg',uploadedAt: new Date().toISOString() },
-  { id: 'celia-img-5', fileName: 'photo_mirror_2.jpg',fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 0.8,    width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/photo_mirror_2.jpg',uploadedAt: new Date().toISOString() },
-  { id: 'celia-img-6', fileName: 'photo_outfit_1.jpg',fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 0.8,    width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/photo_outfit_1.jpg',uploadedAt: new Date().toISOString() },
-  { id: 'celia-img-7', fileName: 'photo_outfit_2.jpg',fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 0.8,    width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/photo_outfit_2.jpg',uploadedAt: new Date().toISOString() },
-  { id: 'celia-img-8', fileName: 'photo_couch_1.jpg', fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 1.0,    width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/photo_couch_1.jpg', uploadedAt: new Date().toISOString() },
+  // Videos — real clips from R2 (9:16 reels)
+  { id: 'celia-vid-1', fileName: 'celia clip_06.mp4', fileUrl: R2P('[MODELS]/CELIA/0778e490-d509-4ba9-81c8-ba7f2bcdc1ba/celia clip_06.mp4'), fileType: 'video', aspectRatio: 0.5625, width: 1080, height: 1920, source: 's3', s3Key: '[MODELS]/CELIA/0778e490-d509-4ba9-81c8-ba7f2bcdc1ba/celia clip_06.mp4', uploadedAt: new Date().toISOString() },
+  { id: 'celia-vid-2', fileName: 'celia clip_13.mp4', fileUrl: R2P('[MODELS]/CELIA/11e92647-691d-40e0-8d9b-394f771814da/celia clip_13.mp4'), fileType: 'video', aspectRatio: 0.5625, width: 1080, height: 1920, source: 's3', s3Key: '[MODELS]/CELIA/11e92647-691d-40e0-8d9b-394f771814da/celia clip_13.mp4', uploadedAt: new Date().toISOString() },
+  { id: 'celia-vid-3', fileName: 'celia clip_12.mp4', fileUrl: R2P('[MODELS]/CELIA/34c7c104-7640-4c97-9c26-ebc7a3f4c99b/celia clip_12.mp4'), fileType: 'video', aspectRatio: 0.5625, width: 1080, height: 1920, source: 's3', s3Key: '[MODELS]/CELIA/34c7c104-7640-4c97-9c26-ebc7a3f4c99b/celia clip_12.mp4', uploadedAt: new Date().toISOString() },
+  // Images — real photos from R2 (square 1:1 and portrait 4:5)
+  { id: 'celia-img-1', fileName: 'CeliaDetailed_00028_.png', fileUrl: R2P('[MODELS]/CELIA/00e0e61d-bea2-45fe-bef2-26eba37f63c9/CeliaDetailed_00028_.png'), fileType: 'image', aspectRatio: 1.0, width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/00e0e61d-bea2-45fe-bef2-26eba37f63c9/CeliaDetailed_00028_.png', uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-2', fileName: 'CeliaDetailed_00016_.png', fileUrl: R2P('[MODELS]/CELIA/02f3355d-e239-432c-ad65-4ee0a6ceb417/CeliaDetailed_00016_.png'), fileType: 'image', aspectRatio: 1.0, width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/02f3355d-e239-432c-ad65-4ee0a6ceb417/CeliaDetailed_00016_.png', uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-3', fileName: 'CeliaDetailed_00146_.png', fileUrl: R2P('[MODELS]/CELIA/03ac4355-f3d9-4c9f-a239-c4d0079f674a/CeliaDetailed_00146_.png'), fileType: 'image', aspectRatio: 1.0, width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/03ac4355-f3d9-4c9f-a239-c4d0079f674a/CeliaDetailed_00146_.png', uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-4', fileName: 'CeliaDetailed_00023_.png', fileUrl: R2P('[MODELS]/CELIA/064ac44d-444f-4feb-8450-fa625799d1f4/CeliaDetailed_00023_.png'), fileType: 'image', aspectRatio: 0.8, width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/064ac44d-444f-4feb-8450-fa625799d1f4/CeliaDetailed_00023_.png', uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-5', fileName: 'Mar10_24.png',             fileUrl: R2P('[MODELS]/CELIA/066cac5d-36ce-4690-97eb-785efa15b5da/Mar10_24.png'),             fileType: 'image', aspectRatio: 0.8, width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/066cac5d-36ce-4690-97eb-785efa15b5da/Mar10_24.png',             uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-6', fileName: 'C3lia (15).png',           fileUrl: R2P('[MODELS]/CELIA/06a12715-5c7b-47f0-b1ba-f420a6680f97/C3lia (15).png'),           fileType: 'image', aspectRatio: 0.8, width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/06a12715-5c7b-47f0-b1ba-f420a6680f97/C3lia (15).png',           uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-7', fileName: 'Celi (7).png',             fileUrl: R2P('[MODELS]/CELIA/073a3a95-b98d-4e65-a8d8-95278ed5a1fd/Celi (7).png'),             fileType: 'image', aspectRatio: 0.8, width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/073a3a95-b98d-4e65-a8d8-95278ed5a1fd/Celi (7).png',             uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-8', fileName: 'CeliaDetailed_00113_.png', fileUrl: R2P('[MODELS]/CELIA/07e12d32-20f0-40e7-a459-a926d27ef31e/CeliaDetailed_00113_.png'), fileType: 'image', aspectRatio: 1.0, width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/07e12d32-20f0-40e7-a459-a926d27ef31e/CeliaDetailed_00113_.png', uploadedAt: new Date().toISOString() },
 ];
 
 // IDs of Celia's assets that are "approved" (ready to schedule)
@@ -550,9 +553,9 @@ export const mockPosts: Post[] = [
     description: 'New content dropping 💎',
     imageCaption: 'Catch me if you can ✨',
     assets: [
-      { id: 'asset-1', postId: 'post-1', fileUrl: '/demo-image.jpg', fileName: 'photo1.jpg', fileType: 'image', order: 1 },
-      { id: 'asset-2', postId: 'post-1', fileUrl: '/demo-image.jpg', fileName: 'photo2.jpg', fileType: 'image', order: 2 },
-      { id: 'asset-3', postId: 'post-1', fileUrl: '/demo-image.jpg', fileName: 'photo3.jpg', fileType: 'image', order: 3 },
+      { id: 'asset-1', postId: 'post-1', fileUrl: R2P('[MODELS]/LOKI/pics/026db123-be8e-4ecb-93ee-894bfebbf37d/l0ki_112.png'), fileName: 'l0ki_112.png', fileType: 'image', order: 1 },
+      { id: 'asset-2', postId: 'post-1', fileUrl: R2P('[MODELS]/LOKI/pics/0478b1f3-19e0-4d26-bfd7-52ecb386dda8/l0ki_083.png'), fileName: 'l0ki_083.png', fileType: 'image', order: 2 },
+      { id: 'asset-3', postId: 'post-1', fileUrl: R2P('[MODELS]/LOKI/pics/074f4e6c-6f5c-43ea-8050-74ab179af4c8/l0ki_025.png'), fileName: 'l0ki_025.png', fileType: 'image', order: 3 },
     ],
     assignedVaId: 'va-1',
     createdAt: new Date().toISOString(),
@@ -567,7 +570,7 @@ export const mockPosts: Post[] = [
     status: 'scheduled',
     description: 'Check this out 🔥',
     assets: [
-      { id: 'asset-4', postId: 'post-2', fileUrl: '/demo-video.mp4', fileName: 'reel.mp4', fileType: 'video', order: 1 },
+      { id: 'asset-4', postId: 'post-2', fileUrl: R2P('[MODELS]/LOKI/loki clips/068facf0-412d-41f0-8e40-532e3e0757d1/output (15).mp4'), fileName: 'output (15).mp4', fileType: 'video', order: 1 },
     ],
     assignedVaId: 'va-1',
     createdAt: new Date().toISOString(),
@@ -584,7 +587,7 @@ export const mockPosts: Post[] = [
     imageCaption: 'Slide 1 ✨',
     assets: [
       {
-        id: 'asset-5', postId: 'post-3', fileUrl: '/demo-image.jpg', fileName: 'slide1.jpg', fileType: 'image', order: 1,
+        id: 'asset-5', postId: 'post-3', fileUrl: R2P('[MODELS]/LOKI/pics/07812814-d10c-45c5-9462-6dfaf37869a6/l0ki_119.png'), fileName: 'l0ki_119.png', fileType: 'image', order: 1,
         overlayConfig: { text: 'Slide 1 ✨', position: { x: 50, y: 50 }, fontSize: 24, fontFamily: 'Arial', color: '#ffffff' },
       },
     ],
