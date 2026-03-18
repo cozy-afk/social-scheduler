@@ -402,7 +402,7 @@ export default function ModelSettingsPage() {
     const metaError = params.get('meta_error');
 
     if (metaError) {
-      alert(`Meta connection failed: ${params.get('meta_error_reason') ?? metaError}`);
+      console.error(`Meta connection failed: ${params.get('meta_error_reason') ?? metaError}`);
       window.history.replaceState({}, '', `/models/${modelId}`);
       return;
     }
