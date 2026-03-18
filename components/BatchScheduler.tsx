@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import { ChevronLeft, Calendar, Film, Zap, X, Check, Pencil, Globe, Image, BookOpen, FileText } from 'lucide-react';
+import { ChevronLeft, Calendar, Film, Zap, X, Check, Pencil, Globe, Image, BookOpen, FileText, AlertTriangle, Crop } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { GalleryAsset, PostType, Platform, TimeSlot } from '@/types/models';
 import { addDays, format, startOfDay } from 'date-fns';
@@ -38,24 +38,22 @@ function deriveContentType(postType: PostType): ContentType {
 function AssetCard({
   asset,
   onDragStart,
-  isScheduled,
+  usageCount,
 }: {
   asset: GalleryAsset;
   onDragStart: () => void;
-  isScheduled: boolean;
+  usageCount: number;
 }) {
+  const isVideo = asset.fileType === 'video';
   return (
     <div
       draggable
       onDragStart={onDragStart}
-      className={`card p-3 flex items-center gap-3 cursor-grab active:cursor-grabbing transition-all ${
-        isScheduled ? 'opacity-40' : 'hover:border-violet-500/30'
-      }`}
-      style={{ borderColor: isScheduled ? 'rgba(34,197,94,0.2)' : undefined }}
+      className="card p-3 flex items-center gap-3 cursor-grab active:cursor-grabbing transition-all hover:border-violet-500/30"
     >
       <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center"
         style={{ background: 'var(--bg-elevated)' }}>
-        {asset.fileType === 'image' && asset.fileUrl ? (
+        {!isVideo && asset.fileUrl ? (
           <img src={asset.fileUrl} alt="" className="w-full h-full object-cover" />
         ) : (
           <Film className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
@@ -63,11 +61,15 @@ function AssetCard({
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-xs text-white truncate font-medium">{asset.fileName}</p>
-        <span className={`text-[10px] ${asset.fileType === 'video' ? 'text-red-400' : 'text-violet-400'}`}>
-          {asset.fileType}
+        <span className={`text-[10px] font-semibold ${isVideo ? 'text-violet-400' : 'text-amber-400'}`}>
+          {isVideo ? 'Video → Reel/Story' : 'Image → Carousel/Post'}
         </span>
       </div>
-      {isScheduled && <Check className="w-4 h-4 text-green-400 flex-shrink-0" />}
+      {usageCount > 0 && (
+        <span className="text-[10px] font-bold text-green-400 bg-green-400/10 border border-green-400/20 px-1.5 py-0.5 rounded flex-shrink-0">
+          ×{usageCount}
+        </span>
+      )}
     </div>
   );
 }
@@ -77,24 +79,37 @@ function SlotCard({
   asset,
   editResult,
   isDragOver,
+  isDragIncompat,
   onDragOver,
   onDragLeave,
   onDrop,
   onRemove,
   onEdit,
+  onResizeCarousel,
 }: {
   slot: ScheduleSlot;
   asset: GalleryAsset | undefined;
   editResult?: EditorResult;
   isDragOver: boolean;
+  isDragIncompat: boolean;
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: () => void;
   onRemove: () => void;
   onEdit: () => void;
+  onResizeCarousel?: () => void;
 }) {
   const theme = PLATFORM_THEMES[slot.platform];
   const appliedFilter = editResult?.filter && editResult.filter !== 'none' ? editResult.filter : undefined;
+
+  // Carousel aspect ratio check: IG carousels must be 1:1 or 4:5 for ads eligibility
+  const cropRatio = editResult?.cropRatio;
+  const needsCarouselWarning =
+    slot.contentType === 'carousel' &&
+    slot.platform === 'instagram' &&
+    asset != null &&
+    cropRatio !== '1:1' &&
+    cropRatio !== '4:5';
 
   return (
     <div
@@ -102,14 +117,22 @@ function SlotCard({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       className={`relative rounded-xl p-3 border transition-all min-h-[72px] ${
-        isDragOver
+        isDragIncompat
+          ? 'border-red-500/50 bg-red-500/05'
+          : isDragOver
           ? 'border-violet-500/60'
           : asset
           ? 'border-green-500/20'
           : 'border-dashed border-white/10 hover:border-white/20'
       }`}
       style={{
-        background: isDragOver ? 'rgba(124,58,237,0.08)' : asset ? 'rgba(34,197,94,0.04)' : 'rgba(255,255,255,0.02)',
+        background: isDragIncompat
+          ? 'rgba(239,68,68,0.04)'
+          : isDragOver
+          ? 'rgba(124,58,237,0.08)'
+          : asset
+          ? 'rgba(34,197,94,0.04)'
+          : 'rgba(255,255,255,0.02)',
       }}
     >
       <div className="flex items-center gap-2 mb-1.5">
@@ -121,43 +144,61 @@ function SlotCard({
         <span className="text-[10px] text-zinc-600 ml-auto font-mono">{slot.time}</span>
       </div>
 
-      {asset ? (
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 relative" style={{ background: 'var(--bg-elevated)' }}>
-            {asset.fileType === 'image' && asset.fileUrl ? (
-              <img
-                src={asset.fileUrl}
-                alt=""
-                className="w-full h-full object-cover"
-                style={{ filter: appliedFilter }}
-              />
-            ) : (
-              <Film className="w-4 h-4 m-auto mt-2" style={{ color: 'var(--text-muted)' }} />
-            )}
-            {editResult && (
-              <div
-                className="absolute bottom-0 right-0 w-3 h-3 rounded-tl-md flex items-center justify-center"
-                style={{ background: 'var(--accent-violet)' }}
-                title={`Filter: ${editResult.filterLabel}`}
+      {isDragIncompat ? (
+        <p className="text-[10px] text-red-400 font-medium">
+          {slot.contentType === 'carousel' ? '✕ Videos cannot go in carousel slots' : '✕ Images cannot go in reel/story slots'}
+        </p>
+      ) : asset ? (
+        <>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 relative" style={{ background: 'var(--bg-elevated)' }}>
+              {asset.fileType === 'image' && asset.fileUrl ? (
+                <img
+                  src={asset.fileUrl}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  style={{ filter: appliedFilter }}
+                />
+              ) : (
+                <Film className="w-4 h-4 m-auto mt-2" style={{ color: 'var(--text-muted)' }} />
+              )}
+              {editResult && (
+                <div
+                  className="absolute bottom-0 right-0 w-3 h-3 rounded-tl-md flex items-center justify-center"
+                  style={{ background: 'var(--accent-violet)' }}
+                  title={`Filter: ${editResult.filterLabel}`}
+                >
+                  <Pencil className="w-1.5 h-1.5 text-white" />
+                </div>
+              )}
+            </div>
+            <p className="text-[11px] text-zinc-300 truncate flex-1">{asset.fileName}</p>
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              <button
+                onClick={onEdit}
+                className="p-1 text-zinc-600 hover:text-violet-400 transition-colors"
+                title="Edit in native editor"
               >
-                <Pencil className="w-1.5 h-1.5 text-white" />
-              </div>
-            )}
+                <Pencil className="w-3 h-3" />
+              </button>
+              <button onClick={onRemove} className="p-1 text-zinc-600 hover:text-red-400 transition-colors">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
           </div>
-          <p className="text-[11px] text-zinc-300 truncate flex-1">{asset.fileName}</p>
-          <div className="flex items-center gap-0.5 flex-shrink-0">
-            <button
-              onClick={onEdit}
-              className="p-1 text-zinc-600 hover:text-violet-400 transition-colors"
-              title="Edit in native editor"
-            >
-              <Pencil className="w-3 h-3" />
-            </button>
-            <button onClick={onRemove} className="p-1 text-zinc-600 hover:text-red-400 transition-colors">
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
+          {needsCarouselWarning && (
+            <div className="mt-1.5 flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/25 rounded-lg px-2 py-1">
+              <AlertTriangle className="w-3 h-3 text-amber-400 flex-shrink-0" />
+              <span className="text-[10px] text-amber-300 flex-1">Not ads-eligible — needs 1:1 or 4:5</span>
+              <button
+                onClick={onResizeCarousel}
+                className="text-[10px] text-amber-400 hover:text-amber-200 font-semibold flex items-center gap-0.5 transition-colors"
+              >
+                <Crop className="w-2.5 h-2.5" /> Resize
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
           {isDragOver
@@ -245,62 +286,110 @@ export default function BatchScheduler() {
     }));
   }, [selectedModel, modelTimezone, assets]);
 
+  // slotId → assetId (many slots can share the same asset for cross-posting)
   const [slotAssignments, setSlotAssignments] = useState<Record<string, string>>({});
   const [dragAssetId, setDragAssetId] = useState<string | null>(null);
   const [dragOverSlotId, setDragOverSlotId] = useState<string | null>(null);
-  const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
+  const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
   const [editResults, setEditResults] = useState<Record<string, EditorResult>>({});
+  // slotId → resize-target: open editor in crop mode for carousel resize
+  const [resizingSlotId, setResizingSlotId] = useState<string | null>(null);
 
-  const assignedAssetIds = useMemo(() => new Set(Object.values(slotAssignments)), [slotAssignments]);
+  // How many slots each asset has been assigned to
+  const assetUsageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const assetId of Object.values(slotAssignments)) {
+      counts[assetId] = (counts[assetId] ?? 0) + 1;
+    }
+    return counts;
+  }, [slotAssignments]);
+
+  // Is the currently-dragged asset incompatible with a given slot?
+  const isDragIncompat = useCallback((slot: ScheduleSlot) => {
+    if (!dragAssetId) return false;
+    const asset = assets.find((a) => a.id === dragAssetId);
+    if (!asset) return false;
+    const isVideo = asset.fileType === 'video';
+    const isImage = asset.fileType === 'image';
+    if (isVideo && (slot.contentType === 'carousel')) return true;
+    if (isImage && (slot.contentType === 'reel' || slot.contentType === 'story')) return true;
+    return false;
+  }, [dragAssetId, assets]);
 
   const handleAutoFill = useCallback(() => {
-    const unassigned = assets.filter((a) => !assignedAssetIds.has(a.id));
     const emptySlots = slots.filter((s) => !slotAssignments[s.id]);
     const newAssignments: Record<string, string> = { ...slotAssignments };
 
-    // Separate assets by type for smart matching
-    const videoAssets = unassigned.filter((a) => a.fileType === 'video');
-    const imageAssets = unassigned.filter((a) => a.fileType === 'image');
-    const usedIds = new Set<string>();
+    const videoAssets = assets.filter((a) => a.fileType === 'video');
+    const imageAssets = assets.filter((a) => a.fileType === 'image');
 
+    // Group empty slots by date+time so the same asset fills all compatible
+    // slots at the same time (e.g. IG Reel 09:00 + TikTok Reel 09:00 → same video)
+    const timeGroups: Record<string, ScheduleSlot[]> = {};
     for (const slot of emptySlots) {
-      let picked: GalleryAsset | undefined;
+      const key = `${slot.date}-${slot.time}`;
+      if (!timeGroups[key]) timeGroups[key] = [];
+      timeGroups[key].push(slot);
+    }
 
-      if (slot.contentType === 'reel' || slot.contentType === 'story') {
-        // Prefer videos for reel/story windows
-        picked = videoAssets.find((a) => !usedIds.has(a.id))
-          ?? imageAssets.find((a) => !usedIds.has(a.id));
-      } else if (slot.contentType === 'carousel') {
-        // Prefer images for carousel windows
-        picked = imageAssets.find((a) => !usedIds.has(a.id))
-          ?? videoAssets.find((a) => !usedIds.has(a.id));
-      } else {
-        // No preference — next unassigned
-        picked = unassigned.find((a) => !usedIds.has(a.id));
+    let videoIdx = 0;
+    let imageIdx = 0;
+
+    for (const group of Object.values(timeGroups)) {
+      const videoAsset = videoIdx < videoAssets.length ? videoAssets[videoIdx] : undefined;
+      const imageAsset = imageIdx < imageAssets.length ? imageAssets[imageIdx] : undefined;
+
+      let usedVideo = false;
+      let usedImage = false;
+
+      for (const slot of group) {
+        if (slot.contentType === 'reel' || slot.contentType === 'story') {
+          // STRICT: only videos in reel/story slots
+          if (videoAsset) {
+            newAssignments[slot.id] = videoAsset.id;
+            usedVideo = true;
+          }
+        } else if (slot.contentType === 'carousel') {
+          // STRICT: only images in carousel slots
+          if (imageAsset) {
+            newAssignments[slot.id] = imageAsset.id;
+            usedImage = true;
+          }
+        } else {
+          // Post slot: prefer video, fallback image
+          const any = videoAsset ?? imageAsset;
+          if (any) {
+            newAssignments[slot.id] = any.id;
+            if (any.fileType === 'video') usedVideo = true;
+            else usedImage = true;
+          }
+        }
       }
 
-      if (!picked) break;
-      usedIds.add(picked.id);
-      newAssignments[slot.id] = picked.id;
+      // Advance indices only when the asset was actually used in this time group
+      if (usedVideo) videoIdx++;
+      if (usedImage) imageIdx++;
     }
 
     setSlotAssignments(newAssignments);
-  }, [assets, assignedAssetIds, slots, slotAssignments]);
+  }, [assets, slots, slotAssignments]);
 
   const handleDrop = useCallback((slotId: string) => {
     if (!dragAssetId) return;
-    setSlotAssignments((prev) => {
-      // Remove this asset from any other slot first
-      const next: Record<string, string> = {};
-      for (const [sid, aid] of Object.entries(prev)) {
-        if (aid !== dragAssetId) next[sid] = aid;
-      }
-      next[slotId] = dragAssetId;
-      return next;
-    });
+    const slot = slots.find((s) => s.id === slotId);
+    const asset = assets.find((a) => a.id === dragAssetId);
+    if (slot && asset) {
+      const isVideo = asset.fileType === 'video';
+      const isImage = asset.fileType === 'image';
+      // Block incompatible drops
+      if (isVideo && slot.contentType === 'carousel') { setDragAssetId(null); setDragOverSlotId(null); return; }
+      if (isImage && (slot.contentType === 'reel' || slot.contentType === 'story')) { setDragAssetId(null); setDragOverSlotId(null); return; }
+    }
+    // Allow the same asset in multiple slots — no eviction
+    setSlotAssignments((prev) => ({ ...prev, [slotId]: dragAssetId }));
     setDragAssetId(null);
     setDragOverSlotId(null);
-  }, [dragAssetId]);
+  }, [dragAssetId, slots, assets]);
 
   const handleRemoveFromSlot = useCallback((slotId: string) => {
     setSlotAssignments((prev) => {
@@ -311,19 +400,21 @@ export default function BatchScheduler() {
   }, []);
 
   const handleSaveEdit = useCallback((result: EditorResult) => {
-    if (!editingAssetId) return;
-    setEditResults((prev) => ({ ...prev, [editingAssetId]: result }));
-    setEditingAssetId(null);
-  }, [editingAssetId]);
+    const targetSlotId = editingSlotId ?? resizingSlotId;
+    if (!targetSlotId) return;
+    setEditResults((prev) => ({ ...prev, [targetSlotId]: result }));
+    setEditingSlotId(null);
+    setResizingSlotId(null);
+  }, [editingSlotId, resizingSlotId]);
 
   const scheduledCount = Object.keys(slotAssignments).length;
+  const uniqueAssetsUsed = new Set(Object.values(slotAssignments)).size;
 
   const handleSchedule = useCallback(() => {
     for (const [slotId, assetId] of Object.entries(slotAssignments)) {
       const slot = slots.find((s) => s.id === slotId);
       const asset = assets.find((a) => a.id === assetId);
       if (!slot || !asset) continue;
-      // Use rendered (caption-baked) URL if available, otherwise original
       const stagedAsset = stagedAssets.find((sa) => sa.asset.id === assetId);
       const finalFileUrl = stagedAsset?.renderedUrl ?? asset.fileUrl;
       addPost({
@@ -361,16 +452,20 @@ export default function BatchScheduler() {
     return grouped;
   }, [slots]);
 
-  const editingAsset = editingAssetId ? assets.find((a) => a.id === editingAssetId) : null;
+  const activeEditorSlotId = editingSlotId ?? resizingSlotId;
+  const activeEditorAsset = activeEditorSlotId
+    ? assets.find((a) => a.id === slotAssignments[activeEditorSlotId])
+    : null;
 
   return (
     <>
-    {editingAsset && (
+    {activeEditorAsset && activeEditorSlotId && (
       <NativeEditor
-        mediaUrl={editingAsset.fileUrl}
-        mediaType={editingAsset.fileType}
+        mediaUrl={activeEditorAsset.fileUrl}
+        mediaType={activeEditorAsset.fileType}
+        initialResult={editResults[activeEditorSlotId]}
         onSave={handleSaveEdit}
-        onClose={() => setEditingAssetId(null)}
+        onClose={() => { setEditingSlotId(null); setResizingSlotId(null); }}
       />
     )}
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--bg-app)' }}>
@@ -407,7 +502,7 @@ export default function BatchScheduler() {
               <AssetCard
                 key={asset.id}
                 asset={asset}
-                isScheduled={assignedAssetIds.has(asset.id)}
+                usageCount={assetUsageCounts[asset.id] ?? 0}
                 onDragStart={() => setDragAssetId(asset.id)}
               />
             ))
@@ -440,13 +535,15 @@ export default function BatchScheduler() {
                           key={slot.id}
                           slot={slot}
                           asset={asset}
-                          editResult={asset ? editResults[asset.id] : undefined}
+                          editResult={editResults[slot.id]}
                           isDragOver={dragOverSlotId === slot.id}
+                          isDragIncompat={dragOverSlotId === slot.id && isDragIncompat(slot)}
                           onDragOver={(e) => { e.preventDefault(); setDragOverSlotId(slot.id); }}
                           onDragLeave={() => setDragOverSlotId(null)}
                           onDrop={() => handleDrop(slot.id)}
                           onRemove={() => handleRemoveFromSlot(slot.id)}
-                          onEdit={() => { if (asset) setEditingAssetId(asset.id); }}
+                          onEdit={() => { if (asset) setEditingSlotId(slot.id); }}
+                          onResizeCarousel={() => setResizingSlotId(slot.id)}
                         />
                       );
                     })}
@@ -462,7 +559,8 @@ export default function BatchScheduler() {
       <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t"
         style={{ background: 'var(--bg-sidebar)', borderColor: 'rgba(255,255,255,0.06)' }}>
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-          {scheduledCount} of {assets.length} assets assigned
+          {scheduledCount} slot{scheduledCount !== 1 ? 's' : ''} filled
+          {uniqueAssetsUsed > 0 && ` · ${uniqueAssetsUsed} asset${uniqueAssetsUsed !== 1 ? 's' : ''}`}
         </p>
         <button
           onClick={handleSchedule}

@@ -39,6 +39,7 @@ export interface EditorResult {
 interface NativeEditorProps {
   mediaUrl: string;
   mediaType: 'image' | 'video';
+  initialResult?: EditorResult;
   onSave: (result: EditorResult) => void;
   onClose: () => void;
 }
@@ -79,13 +80,13 @@ const FONT_ORDER: FontKey[] = ['classic', 'modern', 'neon', 'typewriter', 'stron
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function NativeEditor({ mediaUrl, mediaType, onSave, onClose }: NativeEditorProps) {
+export default function NativeEditor({ mediaUrl, mediaType, initialResult, onSave, onClose }: NativeEditorProps) {
   const [activeTab, setActiveTab]           = useState<ToolTab>('filter');
-  const [filter, setFilter]                 = useState('none');
-  const [filterLabel, setFilterLabel]       = useState('Normal');
-  const [cropRatio, setCropRatio]           = useState<CropRatio>('original');
-  const [textLayers, setTextLayers]         = useState<TextLayer[]>([]);
-  const [emojiLayers, setEmojiLayers]       = useState<EmojiLayer[]>([]);
+  const [filter, setFilter]                 = useState(initialResult?.filter ?? 'none');
+  const [filterLabel, setFilterLabel]       = useState(initialResult?.filterLabel ?? 'Normal');
+  const [cropRatio, setCropRatio]           = useState<CropRatio>(initialResult?.cropRatio ?? 'original');
+  const [textLayers, setTextLayers]         = useState<TextLayer[]>(initialResult?.textLayers ?? []);
+  const [emojiLayers, setEmojiLayers]       = useState<EmojiLayer[]>(initialResult?.emojiLayers ?? []);
   const [newText, setNewText]               = useState('');
   const [selectedFont, setSelectedFont]     = useState<FontKey>('classic');
   const [selectedColor, setSelectedColor]   = useState('#FFFFFF');
