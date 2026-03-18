@@ -388,7 +388,35 @@ export default function ModelSettingsPage() {
         fanvueAccountId: handle,
         fanvueConnection: { accessToken: token, connectedAt: new Date().toISOString() },
       });
-      // Clean up URL
+      window.history.replaceState({}, '', `/models/${modelId}`);
+    }
+  }, [modelId, updateModel]);
+
+  // Handle Meta OAuth callback redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get('meta_connected');
+    const igId = params.get('meta_ig_id');
+    const igUsername = params.get('meta_ig_username');
+    const token = params.get('meta_token');
+    const metaError = params.get('meta_error');
+
+    if (metaError) {
+      alert(`Meta connection failed: ${params.get('meta_error_reason') ?? metaError}`);
+      window.history.replaceState({}, '', `/models/${modelId}`);
+      return;
+    }
+
+    if (connected === '1' && token) {
+      setMetaAccountId(igId ?? '');
+      setMetaAccessToken(token);
+      updateModel(modelId, {
+        metaConnection: {
+          instagramAccountId: igId ?? undefined,
+          accessToken: token,
+          connectedAt: new Date().toISOString(),
+        },
+      });
       window.history.replaceState({}, '', `/models/${modelId}`);
     }
   }, [modelId, updateModel]);
@@ -623,6 +651,22 @@ export default function ModelSettingsPage() {
               <p className="text-xs text-slate-400">
                 Each model needs its own Instagram Business Account credentials. These are stored per-model and used for insights and hashtag research.
               </p>
+
+              {/* One-click OAuth */}
+              <a
+                href={`/api/oauth/meta?modelId=${modelId}`}
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg, #833AB4, #FD1D1D, #FCB045)', textDecoration: 'none' }}
+              >
+                <Instagram className="w-4 h-4" />
+                {metaAccountId ? 'Re-connect Instagram' : 'Connect with Instagram'}
+              </a>
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>or enter manually</span>
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+              </div>
 
               <div className="space-y-3">
                 <div>

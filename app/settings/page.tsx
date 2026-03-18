@@ -49,6 +49,20 @@ const PLATFORM_COLORS: Record<string, string> = {
   threads:   'bg-purple-500/20 text-purple-300 border-purple-500/30',
 };
 
+const CONTENT_TYPE_META: Record<NonNullable<TimeSlot['contentType']>, { label: string; color: string; dot: string }> = {
+  reel:     { label: 'Reel',     color: 'bg-violet-500/20 text-violet-300 border-violet-500/30', dot: 'bg-violet-400' },
+  carousel: { label: 'Carousel', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30',   dot: 'bg-amber-400' },
+  story:    { label: 'Story',    color: 'bg-pink-500/20 text-pink-300 border-pink-500/30',       dot: 'bg-pink-400' },
+  post:     { label: 'Post',     color: 'bg-slate-500/20 text-slate-300 border-slate-500/30',   dot: 'bg-slate-400' },
+};
+
+function deriveContentType(postType: PostType): NonNullable<TimeSlot['contentType']> {
+  if (postType.includes('reel')) return 'reel';
+  if (postType.includes('story')) return 'story';
+  if (postType === 'instagram_post' || postType === 'tiktok_slideshow') return 'carousel';
+  return 'post';
+}
+
 const DEFAULT_POSTING_FREQUENCY: PostingFrequencyConfig[] = [
   { platform: 'instagram', enabled: true,  postsPerDay: 3, startHour: 8,  endHour: 21, postTypes: ['instagram_reel', 'instagram_post'] },
   { platform: 'tiktok',    enabled: true,  postsPerDay: 3, startHour: 9,  endHour: 21, postTypes: ['tiktok_reel', 'tiktok_slideshow'] },
@@ -150,6 +164,7 @@ function ModelFormModal({
         platform: slotPlatform,
         postType: slotPostType,
         recurrence: slotRecurrence,
+        contentType: deriveContentType(slotPostType),
       },
     ]);
   };
@@ -282,21 +297,28 @@ function ModelFormModal({
             <div className="space-y-4">
               {schedule.length > 0 ? (
                 <div className="space-y-2">
-                  {schedule.map((slot) => (
-                    <div key={slot.id} className="flex items-center gap-2 card-surface px-3 py-2 rounded-lg">
-                      <span className="font-mono text-sm text-slate-300 w-14">{slot.time}</span>
-                      <span className="text-xs text-slate-400 capitalize flex-1">
-                        {slot.platform} · {slot.postType.replace(`${slot.platform}_`, '')}
-                      </span>
-                      <span className="text-xs text-slate-500 capitalize">{slot.recurrence}</span>
-                      <button
-                        onClick={() => removeSlot(slot.id)}
-                        className="text-slate-500 hover:text-red-400 transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                  {schedule.map((slot) => {
+                    const ct = slot.contentType ?? deriveContentType(slot.postType);
+                    const ctMeta = CONTENT_TYPE_META[ct];
+                    return (
+                      <div key={slot.id} className="flex items-center gap-2 card-surface px-3 py-2 rounded-lg">
+                        <span className="font-mono text-sm text-slate-300 w-14">{slot.time}</span>
+                        <span className="text-xs text-slate-400 capitalize flex-1">
+                          {slot.platform} · {slot.postType.replace(`${slot.platform}_`, '')}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${ctMeta.color}`}>
+                          {ctMeta.label}
+                        </span>
+                        <span className="text-xs text-slate-500 capitalize">{slot.recurrence}</span>
+                        <button
+                          onClick={() => removeSlot(slot.id)}
+                          className="text-slate-500 hover:text-red-400 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-slate-500 text-sm">No time slots configured. Add one below.</p>

@@ -305,6 +305,12 @@ export interface StagedAsset {
   // NEW: Editing state from ImageEditor (using ImageEditorResult type)
   editResult?: any; // Using any to handle ImageEditor.FilterState vs utils.FilterState differences
 
+  // Caption text to overlay on asset (for videos: stored as text; for images: also rendered to renderedUrl)
+  captionText?: string;
+
+  // Canvas-rendered version with caption baked in (data URL, images only)
+  renderedUrl?: string;
+
   // NEW: Platform-specific variants (created when scheduling)
   variants: AssetVariant[];
 

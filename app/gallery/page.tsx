@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useStore, getVisibleModels } from '@/lib/store';
-import { mockModels, mockAdmin } from '@/lib/mockData';
+import { mockModels, mockAdmin, mockPostReferences } from '@/lib/mockData';
 import { AuthGuard } from '@/components/AuthGuard';
 import CreatePostModal from '@/components/CreatePostModal';
 import StagingView from '@/components/StagingView';
@@ -300,7 +300,7 @@ export default function GalleryPage() {
     galleryAssets, setGalleryAssets, addGalleryAsset,
     setShowCreatePostModal, setPreloadedGalleryAssets, showCreatePostModal,
     setStagedAssets, workflowStep, editingTarget, setEditingTarget,
-    updateStagedVariant, setWorkflowStep, stagedAssets, posts,
+    updateStagedVariant, setWorkflowStep, stagedAssets, posts, setPostReferences,
   } = useStore();
   const models = useStore(getVisibleModels); // Filtered by user role/agency
 
@@ -350,7 +350,8 @@ export default function GalleryPage() {
     setModels(mockModels);
     // Do NOT auto-select a model — user picks from the sidebar dropdown
     setCurrentUser(mockAdmin);
-  }, [setModels, setCurrentUser]);
+    setPostReferences(mockPostReferences);
+  }, [setModels, setCurrentUser, setPostReferences]);
 
   const selectedModel = models.find((m) => m.id === selectedModelId);
 

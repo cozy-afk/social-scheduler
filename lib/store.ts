@@ -121,6 +121,8 @@ interface AppState {
   removeAssetVariant: (assetId: string, variantId: string) => void;
   setPlatformCaption: (assetId: string, platform: Platform, config: { text: string; style: CaptionStyle }) => void;
   clearPlatformCaption: (assetId: string, platform: Platform) => void;
+  updateStagedAssetRenderedUrl: (assetId: string, renderedUrl: string) => void;
+  updateStagedAssetCaptionText: (assetId: string, captionText: string) => void;
 
   // Research Groups
   researchGroups: ResearchGroup[];
@@ -428,6 +430,19 @@ export const useStore = create<AppState>((set) => ({
         ),
       };
     }),
+
+  updateStagedAssetRenderedUrl: (assetId, renderedUrl) =>
+    set((state) => ({
+      stagedAssets: state.stagedAssets.map((sa) =>
+        sa.asset.id === assetId ? { ...sa, renderedUrl } : sa
+      ),
+    })),
+  updateStagedAssetCaptionText: (assetId, captionText) =>
+    set((state) => ({
+      stagedAssets: state.stagedAssets.map((sa) =>
+        sa.asset.id === assetId ? { ...sa, captionText } : sa
+      ),
+    })),
 
   // Research Groups
   researchGroups: [],

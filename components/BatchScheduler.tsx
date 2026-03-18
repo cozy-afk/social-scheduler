@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import { ChevronLeft, Calendar, Film, Zap, X, Check, Pencil, Globe } from 'lucide-react';
+import { ChevronLeft, Calendar, Film, Zap, X, Check, Pencil, Globe, Image, BookOpen, FileText } from 'lucide-react';
 import { useStore } from '@/lib/store';
-import { GalleryAsset, PostType, Platform } from '@/types/models';
+import { GalleryAsset, PostType, Platform, TimeSlot } from '@/types/models';
 import { addDays, format, startOfDay } from 'date-fns';
 import { PLATFORM_THEMES } from '@/lib/constants/platform';
 import NativeEditor, { EditorResult } from '@/components/NativeEditor';
 import { generateSmartSlots, formatTimezone, PLATFORM_PEAK_HOURS } from '@/lib/utils/smartSchedule';
+
+type ContentType = NonNullable<TimeSlot['contentType']>;
 
 interface ScheduleSlot {
   id: string;
@@ -15,7 +17,22 @@ interface ScheduleSlot {
   time: string; // HH:MM
   platform: Platform;
   postType: PostType;
+  contentType: ContentType;
   assetId: string | null;
+}
+
+const CONTENT_TYPE_STYLES: Record<ContentType, { label: string; badgeClass: string; icon: React.ElementType }> = {
+  reel:     { label: 'Reel',     badgeClass: 'bg-violet-500/15 text-violet-300 border-violet-500/25', icon: Film },
+  carousel: { label: 'Carousel', badgeClass: 'bg-amber-500/15 text-amber-300 border-amber-500/25',   icon: Image },
+  story:    { label: 'Story',    badgeClass: 'bg-pink-500/15 text-pink-300 border-pink-500/25',       icon: BookOpen },
+  post:     { label: 'Post',     badgeClass: 'bg-slate-500/15 text-slate-300 border-slate-500/25',   icon: FileText },
+};
+
+function deriveContentType(postType: PostType): ContentType {
+  if (postType.includes('reel')) return 'reel';
+  if (postType.includes('story')) return 'story';
+  if (postType === 'instagram_post' || postType === 'tiktok_slideshow') return 'carousel';
+  return 'post';
 }
 
 function AssetCard({
@@ -98,6 +115,9 @@ function SlotCard({
       <div className="flex items-center gap-2 mb-1.5">
         <div className={`w-1.5 h-1.5 rounded-full ${theme.bg}`} />
         <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">{slot.platform}</span>
+        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${CONTENT_TYPE_STYLES[slot.contentType].badgeClass}`}>
+          {CONTENT_TYPE_STYLES[slot.contentType].label}
+        </span>
         <span className="text-[10px] text-zinc-600 ml-auto font-mono">{slot.time}</span>
       </div>
 
@@ -140,7 +160,13 @@ function SlotCard({
         </div>
       ) : (
         <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-          {isDragOver ? 'Drop here' : 'Drop asset here'}
+          {isDragOver
+            ? 'Drop here'
+            : slot.contentType === 'reel' || slot.contentType === 'story'
+            ? 'Drop video here'
+            : slot.contentType === 'carousel'
+            ? 'Drop image(s) here'
+            : 'Drop asset here'}
         </p>
       )}
     </div>
@@ -191,6 +217,7 @@ export default function BatchScheduler() {
             time: slot.time,
             platform: slot.platform,
             postType: slot.postType,
+            contentType: slot.contentType ?? deriveContentType(slot.postType),
             assetId: null,
           });
         }
@@ -213,6 +240,7 @@ export default function BatchScheduler() {
       time: s.time,
       platform: s.platform,
       postType: s.platform === 'tiktok' ? 'tiktok_reel' : 'instagram_reel' as PostType,
+      contentType: 'reel' as ContentType,
       assetId: null,
     }));
   }, [selectedModel, modelTimezone, assets]);
@@ -229,12 +257,33 @@ export default function BatchScheduler() {
     const unassigned = assets.filter((a) => !assignedAssetIds.has(a.id));
     const emptySlots = slots.filter((s) => !slotAssignments[s.id]);
     const newAssignments: Record<string, string> = { ...slotAssignments };
-    let ai = 0;
+
+    // Separate assets by type for smart matching
+    const videoAssets = unassigned.filter((a) => a.fileType === 'video');
+    const imageAssets = unassigned.filter((a) => a.fileType === 'image');
+    const usedIds = new Set<string>();
+
     for (const slot of emptySlots) {
-      if (ai >= unassigned.length) break;
-      newAssignments[slot.id] = unassigned[ai].id;
-      ai++;
+      let picked: GalleryAsset | undefined;
+
+      if (slot.contentType === 'reel' || slot.contentType === 'story') {
+        // Prefer videos for reel/story windows
+        picked = videoAssets.find((a) => !usedIds.has(a.id))
+          ?? imageAssets.find((a) => !usedIds.has(a.id));
+      } else if (slot.contentType === 'carousel') {
+        // Prefer images for carousel windows
+        picked = imageAssets.find((a) => !usedIds.has(a.id))
+          ?? videoAssets.find((a) => !usedIds.has(a.id));
+      } else {
+        // No preference — next unassigned
+        picked = unassigned.find((a) => !usedIds.has(a.id));
+      }
+
+      if (!picked) break;
+      usedIds.add(picked.id);
+      newAssignments[slot.id] = picked.id;
     }
+
     setSlotAssignments(newAssignments);
   }, [assets, assignedAssetIds, slots, slotAssignments]);
 
@@ -274,6 +323,9 @@ export default function BatchScheduler() {
       const slot = slots.find((s) => s.id === slotId);
       const asset = assets.find((a) => a.id === assetId);
       if (!slot || !asset) continue;
+      // Use rendered (caption-baked) URL if available, otherwise original
+      const stagedAsset = stagedAssets.find((sa) => sa.asset.id === assetId);
+      const finalFileUrl = stagedAsset?.renderedUrl ?? asset.fileUrl;
       addPost({
         id: `post-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         modelId: selectedModelId || 'default',
@@ -282,10 +334,11 @@ export default function BatchScheduler() {
         scheduledTime: `${slot.date}T${slot.time}:00`,
         status: 'scheduled',
         description: '',
+        imageCaption: stagedAsset?.captionText ?? '',
         assets: [{
           id: `asset-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           postId: '',
-          fileUrl: asset.fileUrl,
+          fileUrl: finalFileUrl,
           fileName: asset.fileName,
           fileType: asset.fileType,
           order: 1,
@@ -296,7 +349,7 @@ export default function BatchScheduler() {
     }
     clearStaging();
     setWorkflowStep('gallery');
-  }, [slotAssignments, slots, assets, addPost, selectedModelId, clearStaging, setWorkflowStep]);
+  }, [slotAssignments, slots, assets, stagedAssets, addPost, selectedModelId, clearStaging, setWorkflowStep]);
 
   // Group slots by date for display
   const slotsByDate = useMemo(() => {
