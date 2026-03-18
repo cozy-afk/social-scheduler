@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { mockModels, mockAdmin, mockPosts } from '@/lib/mockData';
-import { GalleryAsset, Post, Platform } from '@/types/models';
+import { GalleryAsset, Post, Platform, TimeSlot } from '@/types/models';
 import {
   Film, Heart, MessageCircle, Bookmark, ChevronLeft, ChevronRight,
   CheckCircle2, ExternalLink, Share2, Send, Repeat2, MoreHorizontal,
@@ -16,7 +16,8 @@ import Link from 'next/link';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay,
   addMonths, subMonths, isToday, parseISO, isWithinInterval,
-  startOfWeek, addDays, differenceInCalendarDays,
+  startOfWeek, addDays, differenceInCalendarDays, setHours, setMinutes,
+  isBefore,
 } from 'date-fns';
 import { PLATFORM_THEMES } from '@/lib/constants/platform';
 import type { PostType } from '@/types/models';
@@ -634,15 +635,16 @@ interface AssetCarouselGroup {
 }
 
 function ApprovedAssetsPanel({
-  assets, selectedId, onSelect, onDragStart,
+  assets, selectedId, onSelect, onDragStart, groups, setGroups, onAutoSchedule,
 }: {
   assets: GalleryAsset[]; selectedId: string | null;
   onSelect: (id: string) => void; onDragStart: (id: string) => void;
+  groups: AssetCarouselGroup[]; setGroups: (g: AssetCarouselGroup[]) => void;
+  onAutoSchedule: () => void;
 }) {
   const [panelWidth, setPanelWidth] = useState(248);
   const [linkMode, setLinkMode] = useState(false);
   const [selectedForGroup, setSelectedForGroup] = useState<Set<string>>(new Set());
-  const [groups, setGroups] = useState<AssetCarouselGroup[]>([]);
   const resizeDragRef = useRef<{ startX: number; startW: number } | null>(null);
 
   // ── Resize handle ─────────────────────────────────────────────────────────
@@ -674,14 +676,14 @@ function ApprovedAssetsPanel({
 
   const createCarousel = useCallback(() => {
     if (selectedForGroup.size < 2) return;
-    setGroups((prev) => [...prev, { id: `g-${Date.now()}`, assetIds: Array.from(selectedForGroup) }]);
+    setGroups([...groups, { id: `g-${Date.now()}`, assetIds: Array.from(selectedForGroup) }]);
     setSelectedForGroup(new Set());
     setLinkMode(false);
-  }, [selectedForGroup]);
+  }, [selectedForGroup, groups, setGroups]);
 
   const ungroupCarousel = useCallback((groupId: string) => {
-    setGroups((prev) => prev.filter((g) => g.id !== groupId));
-  }, []);
+    setGroups(groups.filter((g) => g.id !== groupId));
+  }, [groups, setGroups]);
 
   const groupedAssetIds = useMemo(() => new Set(groups.flatMap((g) => g.assetIds)), [groups]);
   const ungroupedAssets = useMemo(() => assets.filter((a) => !groupedAssetIds.has(a.id)), [assets, groupedAssetIds]);
@@ -709,18 +711,31 @@ function ApprovedAssetsPanel({
           </p>
         </div>
         <div className="flex items-center gap-1.5">
-          {assets.length >= 2 && (
+          {assets.length >= 2 && !linkMode && (
             <button
-              onClick={() => { setLinkMode((v) => !v); setSelectedForGroup(new Set()); }}
+              onClick={() => { setLinkMode(true); setSelectedForGroup(new Set()); }}
               className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg transition-all font-semibold"
-              style={{
-                background: linkMode ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.06)',
-                border: `1px solid ${linkMode ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                color: linkMode ? '#fbbf24' : 'var(--text-muted)',
-              }}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)' }}
             >
-              <Link2 className="w-3 h-3" />
-              {linkMode ? 'Cancel' : 'Link'}
+              <Link2 className="w-3 h-3" />Link
+            </button>
+          )}
+          {linkMode && (
+            <button
+              onClick={() => { setLinkMode(false); setSelectedForGroup(new Set()); }}
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg font-semibold"
+              style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', color: '#fbbf24' }}
+            >
+              <X className="w-3 h-3" />Cancel
+            </button>
+          )}
+          {assets.length > 0 && !linkMode && (
+            <button
+              onClick={onAutoSchedule}
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg font-semibold transition-all"
+              style={{ background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.4)', color: '#a78bfa' }}
+            >
+              <CalendarDays className="w-3 h-3" />Auto
             </button>
           )}
           <Link href="/gallery" className="text-[10px] flex items-center gap-1 hover:text-violet-400 transition-colors"
@@ -992,10 +1007,14 @@ const PLATFORM_PILL_COLORS: Partial<Record<Platform, string>> = {
   fanvue: '#7C3AED',
 };
 
-function WeeklyTimeline({ posts }: { posts: Post[] }) {
+function WeeklyTimeline({ posts, onDropToDay }: {
+  posts: Post[];
+  onDropToDay?: (date: Date) => void;
+}) {
   const today = new Date();
   const weekStart = startOfWeek(today, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null);
 
   return (
     <div className="rounded-xl overflow-hidden flex-shrink-0"
@@ -1017,17 +1036,29 @@ function WeeklyTimeline({ posts }: { posts: Post[] }) {
           const isPastDay = day < today && !isCurrentDay;
           const hasGap = dayPosts.length === 0;
 
+          const dayKey = format(day, 'yyyy-MM-dd');
+          const isDragOver = dragOverDay === dayKey;
+
           return (
-            <div key={day.toISOString()} className="flex flex-col gap-1 p-2 rounded-lg min-h-[128px]"
+            <div key={day.toISOString()}
+              className="flex flex-col gap-1 p-2 rounded-lg min-h-[128px] transition-all"
+              onDragOver={(e) => { e.preventDefault(); setDragOverDay(dayKey); }}
+              onDragLeave={() => setDragOverDay(null)}
+              onDrop={(e) => { e.preventDefault(); setDragOverDay(null); onDropToDay?.(day); }}
               style={{
-                background: isCurrentDay ? 'rgba(124,58,237,0.08)' : 'rgba(255,255,255,0.02)',
+                background: isDragOver
+                  ? 'rgba(124,58,237,0.15)'
+                  : isCurrentDay ? 'rgba(124,58,237,0.08)' : 'rgba(255,255,255,0.02)',
                 border: `1px solid ${
-                  isCurrentDay
+                  isDragOver
+                    ? 'rgba(124,58,237,0.6)'
+                    : isCurrentDay
                     ? 'rgba(124,58,237,0.35)'
                     : hasGap && !isPastDay
                     ? 'rgba(251,191,36,0.25)'
                     : 'rgba(255,255,255,0.05)'
                 }`,
+                cursor: onDropToDay ? 'copy' : undefined,
               }}>
               {/* Day header */}
               <div className="flex flex-col items-center mb-1.5">
@@ -1210,13 +1241,175 @@ function PlatformHealthGrid({ posts, enabledPlatforms }: {
   );
 }
 
+// ─── Auto-schedule algorithm ──────────────────────────────────────────────────
+
+/** US East Coast default peak hours, sorted by typical engagement */
+const DEFAULT_PEAK_HOURS = [20, 21, 19, 12, 13, 7, 8, 18, 11, 17];
+
+/** Parse the Meta `online_followers` insight value map and return hours
+ *  sorted descending by average follower activity. */
+function parsePeakHours(onlineFollowersData: unknown): number[] {
+  try {
+    const data = (onlineFollowersData as { data?: Array<{ values?: Array<{ value: Record<string, number> }> }> }).data;
+    if (!data?.[0]?.values?.length) return DEFAULT_PEAK_HOURS;
+    // Average across all sampled days
+    const totals: Record<string, number> = {};
+    const dayCount = data[0].values.length;
+    for (const entry of data[0].values) {
+      for (const [hour, count] of Object.entries(entry.value ?? {})) {
+        totals[hour] = (totals[hour] ?? 0) + count;
+      }
+    }
+    return Object.entries(totals)
+      .sort((a, b) => b[1] - a[1])
+      .map(([h]) => parseInt(h, 10));
+  } catch {
+    return DEFAULT_PEAK_HOURS;
+  }
+}
+
+/** Is this asset (or group) suited for a video slot? */
+function isVideoAsset(a: GalleryAsset | null): boolean {
+  return a?.fileType === 'video';
+}
+
+/** Determine the best PostType for an asset on a platform */
+function pickPostType(
+  isVideo: boolean,
+  isCarousel: boolean,
+  platform: Platform,
+  slotTypes: import('@/types/models').PostType[],
+): import('@/types/models').PostType {
+  const REEL_SLOT: Partial<Record<Platform, import('@/types/models').PostType>> = {
+    instagram: 'instagram_reel',
+    tiktok: 'tiktok_reel',
+  };
+  const POST_SLOT: Partial<Record<Platform, import('@/types/models').PostType>> = {
+    instagram: 'instagram_post',
+    tiktok: 'tiktok_slideshow',
+    x: 'x_post',
+    threads: 'threads_post',
+    fanvue: 'fanvue_post',
+  };
+  if (isVideo && REEL_SLOT[platform] && slotTypes.includes(REEL_SLOT[platform]!)) {
+    return REEL_SLOT[platform]!;
+  }
+  if (isCarousel && POST_SLOT[platform]) return POST_SLOT[platform]!;
+  // Pick first matching type from slot definition
+  if (slotTypes.length > 0) return slotTypes[0];
+  return POST_SLOT[platform] ?? 'instagram_post';
+}
+
+interface ScheduleItem {
+  assetId: string;
+  extraAssetIds?: string[]; // carousel group
+  isVideo: boolean;
+  isCarousel: boolean;
+}
+
+interface AutoScheduleResult {
+  posts: Omit<Post, 'id' | 'createdAt' | 'updatedAt'>[];
+  daysUsed: number;
+  platformCounts: Partial<Record<Platform, number>>;
+}
+
+function buildAutoSchedule(
+  items: ScheduleItem[],
+  existingPosts: Post[],
+  modelId: string,
+  schedule: TimeSlot[],
+  peakHours: number[],
+  daysAhead = 21,
+): AutoScheduleResult {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const platformCounts: Partial<Record<Platform, number>> = {};
+  const result: Omit<Post, 'id' | 'createdAt' | 'updatedAt'>[] = [];
+  let itemIdx = 0;
+  let daysUsed = 0;
+
+  // Build a set of already-occupied day+platform+hour combos
+  const occupied = new Set(
+    existingPosts.map((p) => {
+      const d = parseISO(p.scheduledTime);
+      return `${format(d, 'yyyy-MM-dd')}_${p.platform}_${d.getHours()}`;
+    })
+  );
+
+  for (let day = 0; day < daysAhead && itemIdx < items.length; day++) {
+    const date = addDays(today, day);
+    const dateStr = format(date, 'yyyy-MM-dd');
+
+    // Group schedule slots by platform for this day
+    const slotsByPlatform: Partial<Record<Platform, TimeSlot[]>> = {};
+    for (const slot of schedule) {
+      if (!slotsByPlatform[slot.platform]) slotsByPlatform[slot.platform] = [];
+      slotsByPlatform[slot.platform]!.push(slot);
+    }
+
+    for (const [platform, slots] of Object.entries(slotsByPlatform) as [Platform, TimeSlot[]][]) {
+      for (const slot of slots) {
+        if (itemIdx >= items.length) break;
+
+        // Parse the slot time (e.g. "09:00")
+        const [slotHour, slotMin] = slot.time.split(':').map(Number);
+
+        // Use peak hours to pick the best available hour near the slot time
+        // Strategy: try slot's own hour first, then nearest peak hours
+        const candidateHours = [slotHour, ...peakHours.filter((h) => h !== slotHour)];
+        let chosenHour: number | null = null;
+        for (const h of candidateHours) {
+          const key = `${dateStr}_${platform}_${h}`;
+          if (!occupied.has(key)) {
+            chosenHour = h;
+            break;
+          }
+        }
+        if (chosenHour === null) continue; // All hours taken for this platform on this day
+
+        const item = items[itemIdx];
+        const slotTypes = slot.postType ? [slot.postType] : [];
+        const postType = pickPostType(item.isVideo, item.isCarousel, platform, slotTypes);
+
+        const scheduledDate = setMinutes(setHours(date, chosenHour), slotMin);
+        occupied.add(`${dateStr}_${platform}_${chosenHour}`);
+
+        const allAssetIds = [item.assetId, ...(item.extraAssetIds ?? [])];
+        result.push({
+          modelId,
+          platform,
+          postType,
+          scheduledTime: scheduledDate.toISOString(),
+          status: 'scheduled',
+          description: '',
+          assets: allAssetIds.map((aid, order) => ({
+            id: `asset-${Date.now()}-${order}`,
+            postId: '',
+            fileUrl: '',
+            fileName: aid,
+            fileType: (item.isVideo ? 'video' : 'image') as 'image' | 'video',
+            order,
+          })),
+          approvalStatus: 'pending' as const,
+        });
+
+        platformCounts[platform] = (platformCounts[platform] ?? 0) + 1;
+        itemIdx++;
+        daysUsed = Math.max(daysUsed, day + 1);
+      }
+    }
+  }
+
+  return { posts: result, daysUsed, platformCounts };
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SchedulePage() {
   const {
     models, selectedModelId, setModels, setSelectedModelId,
     currentUser, setCurrentUser, posts, setPosts,
-    galleryAssets, setGalleryAssets, approvedAssetIds,
+    galleryAssets, setGalleryAssets, approvedAssetIds, updatePost,
   } = useStore();
 
   useEffect(() => {
@@ -1244,6 +1437,123 @@ export default function SchedulePage() {
   const [calMonth, setCalMonth] = useState(new Date());
   const [selectedCalDate, setSelectedCalDate] = useState<Date | null>(null);
   const [showPhonePreview, setShowPhonePreview] = useState(false);
+
+  // ─── Audience peak hours (from Meta Insights or US defaults) ─────────────
+  const [peakHours, setPeakHours] = useState<number[]>(DEFAULT_PEAK_HOURS);
+
+  useEffect(() => {
+    const conn = selectedModel?.metaConnection;
+    if (!conn?.instagramAccountId || !conn?.accessToken) return;
+    fetch(`/api/meta/insights?accountId=${conn.instagramAccountId}`, {
+      headers: { Authorization: `Bearer ${conn.accessToken}` },
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success && json.data?.onlineFollowers) {
+          const parsed = parsePeakHours(json.data.onlineFollowers);
+          if (parsed.length > 0) setPeakHours(parsed);
+        }
+      })
+      .catch(() => {});
+  }, [selectedModel]);
+
+  // ─── Auto-schedule state + carousel groups (lifted from panel) ────────────
+  const [panelGroups, setPanelGroups] = useState<AssetCarouselGroup[]>([]);
+  const [autoSchedulePreview, setAutoSchedulePreview] = useState<AutoScheduleResult | null>(null);
+
+  const handleAutoSchedule = useCallback(() => {
+    if (!selectedModel) return;
+    const groupedIds = new Set(panelGroups.flatMap((g) => g.assetIds));
+    const items: ScheduleItem[] = [
+      ...panelGroups.map((g) => ({
+        assetId: g.assetIds[0],
+        extraAssetIds: g.assetIds.slice(1),
+        isVideo: false,
+        isCarousel: true,
+      })),
+      ...approvedAssets
+        .filter((a) => !groupedIds.has(a.id))
+        .map((a) => ({
+          assetId: a.id,
+          isVideo: a.fileType === 'video',
+          isCarousel: false,
+        })),
+    ];
+    if (items.length === 0) return;
+    const result = buildAutoSchedule(
+      items,
+      modelPosts,
+      selectedModel.id,
+      selectedModel.postingSchedule,
+      peakHours,
+    );
+    setAutoSchedulePreview(result);
+  }, [selectedModel, panelGroups, approvedAssets, modelPosts, peakHours]);
+
+  const confirmAutoSchedule = useCallback(() => {
+    if (!autoSchedulePreview) return;
+    const newPosts: Post[] = autoSchedulePreview.posts.map((p, i) => ({
+      ...p,
+      id: `auto-${Date.now()}-${i}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    setPosts([...posts, ...newPosts]);
+    setAutoSchedulePreview(null);
+  }, [autoSchedulePreview, posts, setPosts]);
+
+  // ─── Drop to timeline day (manual scheduling) ─────────────────────────────
+  const [draggingAssetId, setDraggingAssetId] = useState<string | null>(null);
+
+  const handleDropToTimeline = useCallback((day: Date) => {
+    const assetId = draggingAssetId;
+    if (!assetId || !selectedModel) return;
+
+    const asset = galleryAssets.find((a) => a.id === assetId);
+    if (!asset) return;
+
+    // Find the next available slot on this day using postingSchedule
+    const dayStr = format(day, 'yyyy-MM-dd');
+    const occupiedHours = new Set(
+      posts
+        .filter((p) => p.modelId === selectedModel.id && format(parseISO(p.scheduledTime), 'yyyy-MM-dd') === dayStr)
+        .map((p) => parseISO(p.scheduledTime).getHours())
+    );
+
+    // Pick best available peak hour
+    const candidateHours = [...peakHours, ...Array.from({ length: 24 }, (_, i) => i)];
+    const chosenHour = candidateHours.find((h) => !occupiedHours.has(h)) ?? 12;
+
+    // Determine platform from first enabled slot
+    const firstSlot = selectedModel.postingSchedule[0];
+    const platform: Platform = firstSlot?.platform ?? 'instagram';
+    const postType = pickPostType(asset.fileType === 'video', false, platform, firstSlot ? [firstSlot.postType] : []);
+
+    const scheduledDate = setMinutes(setHours(day, chosenHour), 0);
+    const newPost: Post = {
+      id: `manual-${Date.now()}`,
+      modelId: selectedModel.id,
+      platform,
+      postType,
+      scheduledTime: scheduledDate.toISOString(),
+      status: 'scheduled',
+      description: '',
+      assets: [{ id: `a-${Date.now()}`, postId: '', fileUrl: asset.fileUrl, fileName: asset.fileName, fileType: asset.fileType, order: 0 }],
+      approvalStatus: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setPosts([...posts, newPost]);
+  }, [draggingAssetId, selectedModel, galleryAssets, posts, peakHours, setPosts]);
+
+  // ─── Grid swap (swap scheduledTime of two posts) ──────────────────────────
+  const handleGridSwap = useCallback((postIdA: string, postIdB: string) => {
+    const a = posts.find((p) => p.id === postIdA);
+    const b = posts.find((p) => p.id === postIdB);
+    if (!a || !b) return;
+    updatePost(postIdA, { scheduledTime: b.scheduledTime });
+    updatePost(postIdB, { scheduledTime: a.scheduledTime });
+  }, [posts, updatePost]);
 
   // ─── Stat computations ────────────────────────────────────────────────────
 
@@ -1311,10 +1621,30 @@ export default function SchedulePage() {
   const handleDragStart = useCallback((assetId: string) => { dragAssetRef.current = assetId; }, []);
   const handleDropToSlot = useCallback((slotIdx: number) => {
     if (!dragAssetRef.current) return;
-    setGridSlots((prev) => { const n = [...prev]; n[slotIdx] = dragAssetRef.current; return n; });
+    const incomingId = dragAssetRef.current;
+    setGridSlots((prev) => {
+      const n = [...prev];
+      // If target slot is occupied by a different asset → swap them
+      const existingId = n[slotIdx];
+      if (existingId && existingId !== incomingId) {
+        // Find where incoming is currently placed and swap
+        const fromIdx = n.indexOf(incomingId);
+        if (fromIdx !== -1) n[fromIdx] = existingId;
+        n[slotIdx] = incomingId;
+        // Swap scheduled times of the underlying posts
+        const igPosts = modelPosts.filter((p) => p.platform === 'instagram')
+          .sort((a, b) => parseISO(a.scheduledTime).getTime() - parseISO(b.scheduledTime).getTime());
+        const postA = igPosts[fromIdx];
+        const postB = igPosts[slotIdx];
+        if (postA && postB) handleGridSwap(postA.id, postB.id);
+      } else {
+        n[slotIdx] = incomingId;
+      }
+      return n;
+    });
     dragAssetRef.current = null;
     setDragOverSlot(null);
-  }, []);
+  }, [modelPosts, handleGridSwap]);
 
   // Quota
   const quotas = useMemo(() => {
@@ -1382,7 +1712,10 @@ export default function SchedulePage() {
           assets={approvedAssets}
           selectedId={null}
           onSelect={() => {}}
-          onDragStart={handleDragStart}
+          onDragStart={(id) => { handleDragStart(id); setDraggingAssetId(id); }}
+          groups={panelGroups}
+          setGroups={setPanelGroups}
+          onAutoSchedule={handleAutoSchedule}
         />
 
         {showPhonePreview ? (
@@ -1571,7 +1904,7 @@ export default function SchedulePage() {
             </div>
 
             {/* Weekly timeline */}
-            <WeeklyTimeline posts={modelPosts} />
+            <WeeklyTimeline posts={modelPosts} onDropToDay={handleDropToTimeline} />
 
             {/* Bottom row: upcoming queue + platform health + quota */}
             <div className="flex gap-3 flex-1 min-h-0 overflow-hidden">
@@ -1656,6 +1989,73 @@ export default function SchedulePage() {
           </div>
         )}
       </div>
+
+      {/* ── Auto-Schedule Confirmation Modal ── */}
+      {autoSchedulePreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+          <div className="rounded-2xl p-6 flex flex-col gap-4 max-w-sm w-full mx-4"
+            style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.12)' }}>
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-base font-bold text-white mb-1">Auto-Schedule Preview</h2>
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {peakHours === DEFAULT_PEAK_HOURS
+                    ? 'Using US peak hours — connect IG for personalized times'
+                    : "Using your audience's peak activity from Instagram Insights"}
+                </p>
+              </div>
+              <button onClick={() => setAutoSchedulePreview(null)} className="btn-ghost p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="rounded-xl p-4 space-y-3"
+              style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)' }}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-white font-semibold">Posts to create</span>
+                <span className="text-lg font-bold text-violet-400">{autoSchedulePreview.posts.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-white font-semibold">Days covered</span>
+                <span className="text-sm font-bold text-white">{autoSchedulePreview.daysUsed}</span>
+              </div>
+              <div className="pt-2 space-y-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                {(Object.entries(autoSchedulePreview.platformCounts) as [Platform, number][]).map(([p, count]) => (
+                  <div key={p} className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      {p === 'instagram' && <InstagramIcon size={12} />}
+                      {p === 'tiktok' && <TikTokIcon size={12} />}
+                      {p === 'x' && <XIcon size={12} />}
+                      {p === 'threads' && <ThreadsIcon size={12} />}
+                      {p === 'fanvue' && <FanvueIcon size={12} />}
+                      <span className="text-[11px] text-white">{PLATFORM_THEMES[p].label}</span>
+                    </div>
+                    <span className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+                      {count} post{count !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] px-3 py-2 rounded-lg"
+              style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>
+              <Clock className="w-3 h-3 flex-shrink-0" />
+              Peak windows: {peakHours.slice(0, 3).map((h) => {
+                const d = new Date(); d.setHours(h, 0, 0, 0);
+                return format(d, 'ha');
+              }).join(' · ')}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setAutoSchedulePreview(null)} className="flex-1 btn-secondary text-sm py-2">
+                Cancel
+              </button>
+              <button onClick={confirmAutoSchedule} className="flex-1 btn-primary text-sm py-2">
+                Schedule {autoSchedulePreview.posts.length} posts
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
