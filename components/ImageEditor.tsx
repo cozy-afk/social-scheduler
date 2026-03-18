@@ -161,8 +161,50 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
   const [applying, setApplying] = useState(false);
   const [adjustTab, setAdjustTab] = useState<'filter' | 'adjust'>('filter');
 
+  // Crop pan state — (0.5, 0.5) = center, (0,0) = top-left, (1,1) = bottom-right
+  const [cropPan, setCropPan] = useState({ x: 0.5, y: 0.5 });
+  const [cropDragging, setCropDragging] = useState(false);
+  const [cropDragStart, setCropDragStart] = useState({ clientX: 0, clientY: 0, px: 0.5, py: 0.5 });
+
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  // Reset crop pan when ratio changes
+  useEffect(() => {
+    setCropPan({ x: 0.5, y: 0.5 });
+  }, [cropRatio]);
+
+  // ─ Crop pan drag handlers ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!cropDragging) return;
+
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      // Negate delta — dragging right moves the "window" left (pans toward right edge)
+      const dx = (cropDragStart.clientX - clientX) / rect.width;
+      const dy = (cropDragStart.clientY - clientY) / rect.height;
+      setCropPan({
+        x: Math.max(0, Math.min(1, cropDragStart.px + dx)),
+        y: Math.max(0, Math.min(1, cropDragStart.py + dy)),
+      });
+    };
+
+    const handleUp = () => setCropDragging(false);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+    document.addEventListener('touchmove', handleMove, { passive: true });
+    document.addEventListener('touchend', handleUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleUp);
+    };
+  }, [cropDragging, cropDragStart]);
 
   // ─ Drag handlers ──────────────────────────────────────────────────────────
 
@@ -257,25 +299,28 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
     }
     setApplying(true);
     try {
+      // Fetch via same-origin proxy to avoid canvas CORS taint on presigned R2 URLs
+      const blob = await fetch(item.url).then((r) => r.blob());
+      const blobUrl = URL.createObjectURL(blob);
       const img = new Image();
-      img.crossOrigin = 'anonymous';
       await new Promise<void>((resolve, reject) => {
         img.onload = () => resolve();
         img.onerror = () => reject();
-        img.src = item.url;
+        img.src = blobUrl;
       });
+      URL.revokeObjectURL(blobUrl);
 
-      // Determine crop
+      // Determine crop — apply cropPan offset so user's chosen position is respected
       let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
       const ratioObj = CROP_RATIOS.find((r) => r.value === cropRatio);
       if (ratioObj?.ratio) {
         const imgRatio = sw / sh;
         if (imgRatio > ratioObj.ratio) {
           sw = sh * ratioObj.ratio;
-          sx = (img.naturalWidth - sw) / 2;
+          sx = cropPan.x * (img.naturalWidth - sw);
         } else {
           sh = sw / ratioObj.ratio;
-          sy = (img.naturalHeight - sh) / 2;
+          sy = cropPan.y * (img.naturalHeight - sh);
         }
       }
 
@@ -337,7 +382,7 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
     } finally {
       setApplying(false);
     }
-  }, [item, filters, namedFilter, overlays, cropRatio, onDone]);
+  }, [item, filters, namedFilter, overlays, cropRatio, cropPan, onDone]);
 
   // ─ Crop overlay helper ───────────────────────────────────────────────────
 
@@ -389,15 +434,38 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
         <div
           ref={containerRef}
           className="flex-1 relative overflow-hidden bg-black select-none"
-          onClick={() => setSelectedId(null)}
+          onClick={() => { if (tool !== 'crop') setSelectedId(null); }}
+          onMouseDown={(e) => {
+            if (tool === 'crop' && cropRatio !== 'free') {
+              e.preventDefault();
+              setCropDragStart({ clientX: e.clientX, clientY: e.clientY, px: cropPan.x, py: cropPan.y });
+              setCropDragging(true);
+            }
+          }}
+          onTouchStart={(e) => {
+            if (tool === 'crop' && cropRatio !== 'free') {
+              const t = e.touches[0];
+              setCropDragStart({ clientX: t.clientX, clientY: t.clientY, px: cropPan.x, py: cropPan.y });
+              setCropDragging(true);
+            }
+          }}
+          style={{ cursor: tool === 'crop' && cropRatio !== 'free' ? (cropDragging ? 'grabbing' : 'grab') : 'default' }}
         >
           {item.type === 'image' ? (
             <img
               ref={imgRef}
               src={item.url}
               alt=""
-              className="w-full h-full object-contain"
-              style={{ filter: previewFilterCSS || 'none', userSelect: 'none', pointerEvents: 'none' }}
+              className="w-full h-full"
+              style={{
+                objectFit: tool === 'crop' && cropRatio !== 'free' ? 'cover' : 'contain',
+                objectPosition: tool === 'crop' && cropRatio !== 'free'
+                  ? `${cropPan.x * 100}% ${cropPan.y * 100}%`
+                  : '50% 50%',
+                filter: previewFilterCSS || 'none',
+                userSelect: 'none',
+                pointerEvents: 'none',
+              }}
               draggable={false}
             />
           ) : (
@@ -619,7 +687,10 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
             {/* Crop panel */}
             {tool === 'crop' && (
               <div className="px-4 py-4">
-                <p className="text-xs text-white/50 mb-3">Aspect ratio</p>
+                <p className="text-xs text-white/50 mb-1">Aspect ratio</p>
+                {cropRatio !== 'free' && (
+                  <p className="text-[10px] text-violet-400/80 mb-3">Drag the image above to reposition the crop</p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {CROP_RATIOS.map((r) => {
                     const isLocked = lockedRatio !== undefined && r.value !== lockedRatio && r.value !== 'free';

@@ -4,8 +4,9 @@ import { useStore } from '@/lib/store';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   X, Sparkles, Upload, Check, Film,
-  AlertTriangle, Loader2, Pencil, AlignLeft, AlignCenter, AlignRight,
+  AlertTriangle, Loader2, Pencil, AlignLeft, AlignCenter, AlignRight, CalendarClock,
 } from 'lucide-react';
+import { addDays, startOfDay, setHours, setMinutes, format } from 'date-fns';
 import { PostType, Platform, Caption } from '@/types/models';
 import type { ARCheckResult, MediaItem } from '@/types/utils';
 import ImageEditor, { ImageEditorResult } from './ImageEditor';
@@ -144,6 +145,7 @@ interface PlatformPostSectionProps {
   postType: PostType;
   scheduledTime: string;
   onTimeChange: (time: string) => void;
+  onNextSlot?: () => string;
   imageCaption: string;
   onImageCaptionChange: (text: string) => void;
   captionStyle: CaptionStyle;
@@ -159,6 +161,7 @@ function PlatformPostSection({
   postType,
   scheduledTime,
   onTimeChange,
+  onNextSlot,
   imageCaption,
   onImageCaptionChange,
   captionStyle,
@@ -227,13 +230,30 @@ function PlatformPostSection({
             <label className="text-[10px] uppercase tracking-wider font-semibold mb-1 block" style={{ color: 'var(--text-muted)' }}>
               Schedule Time
             </label>
-            <input
-              type="datetime-local"
-              value={scheduledTime}
-              onChange={(e) => onTimeChange(e.target.value)}
-              className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
-              style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.08)' }}
-            />
+            <div className="flex gap-2">
+              <input
+                type="datetime-local"
+                value={scheduledTime}
+                onChange={(e) => onTimeChange(e.target.value)}
+                className="flex-1 min-w-0 rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.08)' }}
+              />
+              {onNextSlot && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const slot = onNextSlot();
+                    if (slot) onTimeChange(slot);
+                  }}
+                  className="flex-shrink-0 flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg transition-colors"
+                  style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)', color: '#A78BFA' }}
+                  title="Fill in the next available time slot from your posting schedule"
+                >
+                  <CalendarClock className="w-3.5 h-3.5" />
+                  Next slot
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Caption (image overlay) */}
@@ -473,8 +493,39 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
     }
   }, [onClose, setShowCreatePostModal]);
 
-  const { models, selectedModelId, captions, addPost, editingPost, setEditingPost } = useStore();
+  const { models, selectedModelId, captions, posts, addPost, editingPost, setEditingPost } = useStore();
   const selectedModel = models.find((m) => m.id === selectedModelId);
+
+  // Compute next available slot for a platform based on model schedule + existing posts
+  const getNextSlot = useCallback((platform: Platform): string => {
+    if (!selectedModel) return '';
+    const slots = selectedModel.postingSchedule.filter((s) => s.platform === platform);
+    if (slots.length === 0) return '';
+    const now = new Date();
+    for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
+      const date = addDays(startOfDay(now), dayOffset);
+      const dow = date.getDay();
+      const isWeekday = dow >= 1 && dow <= 5;
+      const isWeekend = dow === 0 || dow === 6;
+      for (const slot of slots) {
+        if (slot.recurrence === 'weekdays' && !isWeekday) continue;
+        if (slot.recurrence === 'weekends' && !isWeekend) continue;
+        const [h, m] = slot.time.split(':').map(Number);
+        const slotTime = setMinutes(setHours(date, h), m);
+        if (slotTime <= now) continue;
+        const slotStr = format(slotTime, "yyyy-MM-dd'T'HH:mm");
+        const occupied = posts.some(
+          (p) =>
+            p.modelId === selectedModel.id &&
+            p.platform === platform &&
+            p.scheduledTime.slice(0, 16) === slotStr &&
+            (p.status === 'scheduled' || p.status === 'draft')
+        );
+        if (!occupied) return slotStr;
+      }
+    }
+    return '';
+  }, [selectedModel, posts]);
 
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [arCheckResults, setArCheckResults] = useState<Record<number, ARCheckResult>>({});
@@ -939,6 +990,7 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
                     postType={postType}
                     scheduledTime={platformData[platform].scheduledTime}
                     onTimeChange={(time) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], scheduledTime: time } }))}
+                    onNextSlot={() => getNextSlot(platform)}
                     imageCaption={getVarText(platform).imageCaption}
                     onImageCaptionChange={(text) => setVarText(platform, 'imageCaption', text)}
                     captionStyle={platformData[platform].captionStyle}

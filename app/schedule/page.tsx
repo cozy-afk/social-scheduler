@@ -1034,7 +1034,7 @@ function StatCard({ label, value, sub, color, icon: Icon }: {
   icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="flex-1 rounded-xl p-4 flex flex-col gap-1"
+    <div className="flex-1 min-w-[140px] rounded-xl p-4 flex flex-col gap-1"
       style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)' }}>
       <div className="flex items-center gap-1.5 mb-0.5">
         {Icon && <Icon className="w-3 h-3" />}
@@ -1987,7 +1987,7 @@ export default function SchedulePage() {
           <div className="flex-1 flex flex-col gap-3 overflow-hidden min-w-0">
 
             {/* Stat cards + phone toggle */}
-            <div className="flex items-stretch gap-3 flex-shrink-0">
+            <div className="flex items-stretch gap-3 flex-shrink-0 flex-wrap">
               <StatCard
                 label="Days covered this week"
                 value={`${weeklyStats.covered}/7`}
