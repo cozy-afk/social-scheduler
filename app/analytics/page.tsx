@@ -585,12 +585,12 @@ function NicheTrendsTab() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
-  const { setModels, setSelectedModelId, setCurrentUser } = useStore();
+  const { setModels, selectedModelId, setSelectedModelId, setCurrentUser } = useStore();
   const [tab, setTab] = useState<'models' | 'trends'>('models');
 
   useEffect(() => {
     setModels(mockModels);
-    setSelectedModelId(mockModels[0].id);
+    if (!selectedModelId) setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
   }, [setModels, setSelectedModelId, setCurrentUser]);
 

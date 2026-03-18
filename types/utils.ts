@@ -122,7 +122,7 @@ export interface ImageEditorResult {
   crop?: { x: number; y: number; width: number; height: number };
 }
 
-export type EditorTool = 'filters' | 'crop' | 'enhance' | 'text' | 'emoji';
+export type EditorTool = 'filters' | 'crop' | 'adjust' | 'text' | 'emoji';
 export type LocalCropRatio = 'free' | '1:1' | '4:5' | '9:16' | '16:9';
 
 // ─── Create Post Modal ─────────────────────────────────────────────────────────

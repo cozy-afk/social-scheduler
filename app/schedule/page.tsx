@@ -779,7 +779,7 @@ export default function SchedulePage() {
 
   useEffect(() => {
     setModels(mockModels);
-    setSelectedModelId(mockModels[0].id);
+    if (!selectedModelId) setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
     setPosts(mockPosts);
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -471,7 +471,7 @@ function ModelCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function ModelsPage() {
   const {
-    setModels, setSelectedModelId, setCurrentUser, setPosts, setCaptions,
+    setModels, selectedModelId, setSelectedModelId, setCurrentUser, setPosts, setCaptions,
     vaUsers, setVAUsers,
     addModel, updateModel, deleteModel,
     setMagicLinks,
@@ -484,7 +484,7 @@ export default function ModelsPage() {
 
   useEffect(() => {
     setModels(mockModels);
-    setSelectedModelId(mockModels[0].id);
+    if (!selectedModelId) setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
     setPosts(mockPosts);
     setCaptions(mockCaptions);

@@ -148,7 +148,7 @@ export function getDayMissingCount(posts: Post[], model: Model, day: Date): numb
 // ─── URL Validation ───────────────────────────────────────────────────────────
 
 export function isRealUrl(url?: string): boolean {
-  return !!(url && (url.startsWith('blob:') || url.startsWith('http')));
+  return !!(url && (url.startsWith('blob:') || url.startsWith('http') || url.startsWith('/')));
 }
 
 // ─── Post Formatting ───────────────────────────────────────────────────────────

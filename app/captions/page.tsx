@@ -74,6 +74,7 @@ const CATEGORY_CONFIG: Record<
 export default function CaptionsPage() {
   const {
     setModels,
+    selectedModelId,
     setSelectedModelId,
     setCurrentUser,
     postReferences,
@@ -96,7 +97,7 @@ export default function CaptionsPage() {
 
   useEffect(() => {
     setModels(mockModels);
-    setSelectedModelId(mockModels[0].id);
+    if (!selectedModelId) setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
     setPostReferences([]);
   }, [setModels, setSelectedModelId, setCurrentUser, setPostReferences]);

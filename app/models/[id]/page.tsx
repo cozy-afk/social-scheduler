@@ -334,7 +334,7 @@ export default function ModelSettingsPage() {
   const router = useRouter();
   const modelId = typeof params.id === 'string' ? params.id : '';
 
-  const { models, setModels, setSelectedModelId, setCurrentUser, setVAUsers, updateModel, magicLinks, setMagicLinks } = useStore();
+  const { models, setModels, selectedModelId, setSelectedModelId, setCurrentUser, setVAUsers, updateModel, magicLinks, setMagicLinks } = useStore();
 
   const [saved, setSaved] = useState(false);
   const [tab, setTab] = useState<'frequency' | 'va' | 'insights' | 'fanvue'>('frequency');
@@ -352,7 +352,7 @@ export default function ModelSettingsPage() {
 
   useEffect(() => {
     setModels(mockModels);
-    setSelectedModelId(mockModels[0].id);
+    if (!selectedModelId) setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
     setVAUsers(mockVAUsers);
     setMagicLinks([]);

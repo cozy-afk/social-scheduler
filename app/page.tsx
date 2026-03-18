@@ -8,11 +8,11 @@ import CreatePostModal from '@/components/CreatePostModal';
 import { AuthGuard } from '@/components/AuthGuard';
 
 export default function AdminPage() {
-  const { setModels, setSelectedModelId, setCurrentUser, setPosts, setCaptions, setVAUsers, showCreatePostModal } = useStore();
+  const { setModels, selectedModelId, setSelectedModelId, setCurrentUser, setPosts, setCaptions, setVAUsers, showCreatePostModal } = useStore();
 
   useEffect(() => {
     setModels(mockModels);
-    setSelectedModelId(mockModels[0].id);
+    if (!selectedModelId) setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
     setPosts(mockPosts);
     setCaptions(mockCaptions);
