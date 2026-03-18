@@ -104,15 +104,47 @@ export const mockModels: Model[] = [
     s3Folder: 'CELIA',
     exifPreset: generateExifPreset(),
     assignedVaIds: [],
-    postingFrequency: defaultFrequency,
-    dailyTarget: { reels: 3, carousels: 2, stories: 2 },
+    postingFrequency: [
+      { platform: 'instagram', enabled: true,  postsPerDay: 7, startHour: 9,  endHour: 21, postTypes: ['instagram_reel', 'instagram_post', 'instagram_story'] },
+      { platform: 'tiktok',    enabled: true,  postsPerDay: 7, startHour: 9,  endHour: 21, postTypes: ['tiktok_reel', 'tiktok_slideshow', 'tiktok_story'] },
+      { platform: 'threads',   enabled: true,  postsPerDay: 7, startHour: 9,  endHour: 21, postTypes: ['threads_post'] },
+      { platform: 'x',         enabled: false, postsPerDay: 1, startHour: 9,  endHour: 17, postTypes: ['x_post'] },
+    ],
+    dailyTarget: { reels: 3, carousels: 1, stories: 3 },
+    // Full posting schedule:
+    // – 3 IG reels/day  (9am, 1pm, 9pm)
+    // – 3 TikTok reels/day  (9am, 1pm, 9pm)
+    // – 1 IG carousel/day  (11am, 2-3 images)
+    // – 1 TikTok slideshow/day (11am)
+    // – 7 Threads posts/day  (every ~2h)
+    // – 3 IG stories/day  (10am, 3pm, 8pm)
+    // – 3 TikTok stories/day  (10am, 3pm, 8pm)
     postingSchedule: [
-      { id: 'c1', time: '09:00', platform: 'instagram', postType: 'instagram_reel',  recurrence: 'daily', contentType: 'reel' },
-      { id: 'c2', time: '09:00', platform: 'tiktok',    postType: 'tiktok_reel',      recurrence: 'daily', contentType: 'reel' },
-      { id: 'c3', time: '13:00', platform: 'instagram', postType: 'instagram_post',  recurrence: 'daily', contentType: 'carousel' },
-      { id: 'c4', time: '13:00', platform: 'tiktok',    postType: 'tiktok_slideshow', recurrence: 'daily', contentType: 'carousel' },
-      { id: 'c5', time: '21:00', platform: 'instagram', postType: 'instagram_reel',  recurrence: 'daily', contentType: 'reel' },
-      { id: 'c6', time: '21:00', platform: 'threads',   postType: 'threads_post',     recurrence: 'daily', contentType: 'post' },
+      // ── Reels (3× per platform) ─────────────────────────────────────────
+      { id: 'c1',  time: '09:00', platform: 'instagram', postType: 'instagram_reel',    recurrence: 'daily', contentType: 'reel' },
+      { id: 'c2',  time: '09:00', platform: 'tiktok',    postType: 'tiktok_reel',        recurrence: 'daily', contentType: 'reel' },
+      { id: 'c3',  time: '13:00', platform: 'instagram', postType: 'instagram_reel',    recurrence: 'daily', contentType: 'reel' },
+      { id: 'c4',  time: '13:00', platform: 'tiktok',    postType: 'tiktok_reel',        recurrence: 'daily', contentType: 'reel' },
+      { id: 'c5',  time: '21:00', platform: 'instagram', postType: 'instagram_reel',    recurrence: 'daily', contentType: 'reel' },
+      { id: 'c6',  time: '21:00', platform: 'tiktok',    postType: 'tiktok_reel',        recurrence: 'daily', contentType: 'reel' },
+      // ── Carousels (1× per platform) ────────────────────────────────────
+      { id: 'c7',  time: '11:00', platform: 'instagram', postType: 'instagram_post',    recurrence: 'daily', contentType: 'carousel' },
+      { id: 'c8',  time: '11:00', platform: 'tiktok',    postType: 'tiktok_slideshow',   recurrence: 'daily', contentType: 'carousel' },
+      // ── Stories (3× per platform) ──────────────────────────────────────
+      { id: 'c9',  time: '10:00', platform: 'instagram', postType: 'instagram_story',   recurrence: 'daily', contentType: 'story' },
+      { id: 'c10', time: '15:00', platform: 'instagram', postType: 'instagram_story',   recurrence: 'daily', contentType: 'story' },
+      { id: 'c11', time: '20:00', platform: 'instagram', postType: 'instagram_story',   recurrence: 'daily', contentType: 'story' },
+      { id: 'c12', time: '10:00', platform: 'tiktok',    postType: 'tiktok_story',       recurrence: 'daily', contentType: 'story' },
+      { id: 'c13', time: '15:00', platform: 'tiktok',    postType: 'tiktok_story',       recurrence: 'daily', contentType: 'story' },
+      { id: 'c14', time: '20:00', platform: 'tiktok',    postType: 'tiktok_story',       recurrence: 'daily', contentType: 'story' },
+      // ── Threads (7× per day, every ~2h) ────────────────────────────────
+      { id: 'c15', time: '09:00', platform: 'threads',   postType: 'threads_post',       recurrence: 'daily', contentType: 'post' },
+      { id: 'c16', time: '10:30', platform: 'threads',   postType: 'threads_post',       recurrence: 'daily', contentType: 'post' },
+      { id: 'c17', time: '12:00', platform: 'threads',   postType: 'threads_post',       recurrence: 'daily', contentType: 'post' },
+      { id: 'c18', time: '13:30', platform: 'threads',   postType: 'threads_post',       recurrence: 'daily', contentType: 'post' },
+      { id: 'c19', time: '15:00', platform: 'threads',   postType: 'threads_post',       recurrence: 'daily', contentType: 'post' },
+      { id: 'c20', time: '18:00', platform: 'threads',   postType: 'threads_post',       recurrence: 'daily', contentType: 'post' },
+      { id: 'c21', time: '21:00', platform: 'threads',   postType: 'threads_post',       recurrence: 'daily', contentType: 'post' },
     ],
     status: 'active',
     createdAt: new Date().toISOString(),
@@ -280,6 +312,231 @@ const generatePostsForDay = (date: Date, modelId: string, partial = false): Post
     updatedAt: new Date().toISOString(),
   }));
 };
+
+// ─── Celia Gallery Assets ─────────────────────────────────────────────────────
+// 3 base videos (9:16 reels) + 8 images (carousels + threads)
+// fileUrl uses /demo-* placeholders; real URLs come from R2 at runtime.
+
+export const mockCeliaGalleryAssets: GalleryAsset[] = [
+  // Videos — 9:16 (reels)
+  { id: 'celia-vid-1', fileName: 'reel_outdoor.mp4',  fileUrl: '/demo-video.mp4', thumbnailUrl: '/demo-image.jpg', fileType: 'video', aspectRatio: 0.5625, width: 1080, height: 1920, source: 's3', s3Key: '[MODELS]/CELIA/reel_outdoor.mp4',  uploadedAt: new Date().toISOString() },
+  { id: 'celia-vid-2', fileName: 'reel_bedroom.mp4',  fileUrl: '/demo-video.mp4', thumbnailUrl: '/demo-image.jpg', fileType: 'video', aspectRatio: 0.5625, width: 1080, height: 1920, source: 's3', s3Key: '[MODELS]/CELIA/reel_bedroom.mp4',  uploadedAt: new Date().toISOString() },
+  { id: 'celia-vid-3', fileName: 'reel_studio.mp4',   fileUrl: '/demo-video.mp4', thumbnailUrl: '/demo-image.jpg', fileType: 'video', aspectRatio: 0.5625, width: 1080, height: 1920, source: 's3', s3Key: '[MODELS]/CELIA/reel_studio.mp4',   uploadedAt: new Date().toISOString() },
+  // Images — square (1:1) and portrait (4:5) for carousels + threads
+  { id: 'celia-img-1', fileName: 'photo_beach_1.jpg', fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 1.0,    width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/photo_beach_1.jpg', uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-2', fileName: 'photo_beach_2.jpg', fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 1.0,    width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/photo_beach_2.jpg', uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-3', fileName: 'photo_beach_3.jpg', fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 1.0,    width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/photo_beach_3.jpg', uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-4', fileName: 'photo_mirror_1.jpg',fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 0.8,    width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/photo_mirror_1.jpg',uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-5', fileName: 'photo_mirror_2.jpg',fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 0.8,    width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/photo_mirror_2.jpg',uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-6', fileName: 'photo_outfit_1.jpg',fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 0.8,    width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/photo_outfit_1.jpg',uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-7', fileName: 'photo_outfit_2.jpg',fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 0.8,    width: 1080, height: 1350, source: 's3', s3Key: '[MODELS]/CELIA/photo_outfit_2.jpg',uploadedAt: new Date().toISOString() },
+  { id: 'celia-img-8', fileName: 'photo_couch_1.jpg', fileUrl: '/demo-image.jpg', fileType: 'image', aspectRatio: 1.0,    width: 1080, height: 1080, source: 's3', s3Key: '[MODELS]/CELIA/photo_couch_1.jpg', uploadedAt: new Date().toISOString() },
+];
+
+// IDs of Celia's assets that are "approved" (ready to schedule)
+export const mockCeliaApprovedAssetIds = mockCeliaGalleryAssets.map((a) => a.id);
+
+// ─── Celia Post Generator ─────────────────────────────────────────────────────
+
+const CELIA_REEL_CAPTIONS = [
+  'not everyone gets to see this 🔒 link in bio',
+  'your daily reminder 💌',
+  'POV: you found your new fav page 👀✨',
+  'that girl era 💅 new drop is live',
+  'this is what winning looks like 🏆',
+  'tell me why I keep coming back ✨',
+  'not for everyone 🫦 you know where to find me',
+  'woke up and chose chaos 😈',
+  'the ones who stick around see everything 🔥',
+  'daily content for the ones who appreciate it 💫',
+  'new week new content 🦋 link in bio',
+  'saving the best for my page 😏',
+  'some things are better seen than said 👁',
+  'your tuesday treat 🎁 link in bio',
+  'wait til you see what I posted today 🫢',
+  'different mood today 🌙 check the link',
+  'for the ones who showed up today 💜',
+  'this one hits different 🎧',
+  'new morning new content 🌅',
+  'I see you lurking — just subscribe already 🥹',
+  'friday feels 🔥 link in bio',
+];
+
+const CELIA_THREADS_CAPTIONS = [
+  'morning vibes ☀️ what are you all doing today?',
+  'reminder: you deserve good things 💜',
+  'new content just dropped — you already know where 🔗',
+  'feeling cute might post more later',
+  'woke up and chose peace today 🌿',
+  'who else is having a slow morning? ☕',
+  'your daily affirmation: you are that girl 💅',
+  'honestly the best part of my day is posting for you all',
+  'question: morning person or night owl? I\'m definitely the second 🌙',
+  'dropping something later tonight 👀',
+  'random thought: butterflies in your stomach are just your gut being excited',
+  'today\'s mood: unbothered 🧘‍♀️',
+  'appreciate every person who\'s been here since day 1 💜',
+  'the link in bio literally pays my rent and I\'m not ashamed 😭',
+  'plot twist: the best content is behind the paywall 😈',
+  'sometimes I forget to eat when I\'m creating content lol',
+  'new week energy ✨ let\'s go',
+  'Wednesday check-in: are you hydrated? drink water babes 💧',
+  'I love my job I love my job I love my job 🦋',
+  'grateful for every single one of you fr',
+  'late night thoughts: it\'s crazy how far we\'ve come',
+  'posting from my bed because why would I get up 🛏️',
+];
+
+const CELIA_STORY_CAPTIONS = [
+  '🦋 swipe up', 'new post up ↗️', 'link in bio ✨',
+  'just posted 👆', 'good morning 🌅', 'good night 🌙',
+  'behind the scenes 🎬', 'vibes only ✨', 'for you 💜',
+];
+
+const CELIA_CAROUSEL_CAPTIONS = [
+  { caption: 'swipe to see more 🦋', description: 'New set just dropped — all of these + way more on my page 💜 Link in bio for the full album 🔗' },
+  { caption: 'pick your favorite 💜', description: 'Which one is your favorite? Let me know in the comments 👇 Full set available on my page 🔗' },
+  { caption: 'a little something for your feed ✨', description: 'Starting this week right 🌟 New content up on my page, you know where to find me 💌' },
+  { caption: 'the full set is on my page 😏', description: 'Teaser only here 😈 You want the rest? Link in bio 🔗 I post every single day for my subscribers 💜' },
+  { caption: 'outfit check 🦋', description: 'Which look is your favorite? Saving the best ones for my page as always 💅 Link in bio!' },
+  { caption: 'morning set ☀️', description: 'Good morning babes! New content up — drop in and say hi 🌸 Link in bio 🔗' },
+  { caption: 'week recap 🎬', description: 'A little recap of this week\'s content 🌟 Full library on my page, new drops daily 💜' },
+];
+
+// Rotating video assignments — 3 different videos within the same day, same video OK across days
+const DAILY_VIDEO_ORDER = [
+  ['celia-vid-1', 'celia-vid-2', 'celia-vid-3'], // day 0 (today)
+  ['celia-vid-2', 'celia-vid-3', 'celia-vid-1'], // day 1
+  ['celia-vid-3', 'celia-vid-1', 'celia-vid-2'], // day 2
+  ['celia-vid-1', 'celia-vid-3', 'celia-vid-2'], // day 3
+  ['celia-vid-2', 'celia-vid-1', 'celia-vid-3'], // day 4
+  ['celia-vid-3', 'celia-vid-2', 'celia-vid-1'], // day 5
+  ['celia-vid-1', 'celia-vid-2', 'celia-vid-3'], // day 6
+];
+
+// Carousel image groupings — alternating 2-image and 3-image
+const CAROUSEL_GROUPS = [
+  ['celia-img-1', 'celia-img-2'],                     // 2-image
+  ['celia-img-4', 'celia-img-5', 'celia-img-6'],      // 3-image
+  ['celia-img-2', 'celia-img-3'],                     // 2-image
+  ['celia-img-6', 'celia-img-7', 'celia-img-8'],      // 3-image
+  ['celia-img-1', 'celia-img-4'],                     // 2-image
+  ['celia-img-3', 'celia-img-5', 'celia-img-7'],      // 3-image
+  ['celia-img-2', 'celia-img-8'],                     // 2-image
+];
+
+function makeCeliaPostsForDay(date: Date, dayIndex: number): Post[] {
+  const ds = format(date, 'yyyy-MM-dd');
+  const videos = DAILY_VIDEO_ORDER[dayIndex % 7];
+  const carouselImgIds = CAROUSEL_GROUPS[dayIndex % 7];
+
+  const makeAsset = (postId: string, assetId: string, order: number): Post['assets'][0] => {
+    const galAsset = mockCeliaGalleryAssets.find((a) => a.id === assetId);
+    return {
+      id: `${postId}-a${order}`,
+      postId,
+      fileUrl: galAsset?.fileUrl ?? '/demo-image.jpg',
+      fileName: galAsset?.fileName ?? 'asset.jpg',
+      fileType: galAsset?.fileType ?? 'image',
+      order,
+    };
+  };
+
+  const posts: Post[] = [];
+  let pi = 0; // post index for unique IDs
+
+  // ── IG Reel 1 (9:00) — video[0]
+  const ir1Id = `celia-${ds}-ig-r1`;
+  posts.push({ id: ir1Id, modelId: '4', platform: 'instagram', postType: 'instagram_reel', scheduledTime: `${ds}T09:00:00`, status: 'scheduled', description: CELIA_REEL_CAPTIONS[(dayIndex * 3 + 0) % CELIA_REEL_CAPTIONS.length], assets: [makeAsset(ir1Id, videos[0], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── TikTok Reel 1 (9:00) — video[0]
+  const tr1Id = `celia-${ds}-tt-r1`;
+  posts.push({ id: tr1Id, modelId: '4', platform: 'tiktok', postType: 'tiktok_reel', scheduledTime: `${ds}T09:00:00`, status: 'scheduled', description: CELIA_REEL_CAPTIONS[(dayIndex * 3 + 1) % CELIA_REEL_CAPTIONS.length], assets: [makeAsset(tr1Id, videos[0], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── IG Story 1 (10:00)
+  const is1Id = `celia-${ds}-ig-s1`;
+  posts.push({ id: is1Id, modelId: '4', platform: 'instagram', postType: 'instagram_story', scheduledTime: `${ds}T10:00:00`, status: 'scheduled', description: CELIA_STORY_CAPTIONS[dayIndex % CELIA_STORY_CAPTIONS.length], assets: [makeAsset(is1Id, videos[0], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── TikTok Story 1 (10:00)
+  const ts1Id = `celia-${ds}-tt-s1`;
+  posts.push({ id: ts1Id, modelId: '4', platform: 'tiktok', postType: 'tiktok_story', scheduledTime: `${ds}T10:00:00`, status: 'scheduled', description: CELIA_STORY_CAPTIONS[(dayIndex + 1) % CELIA_STORY_CAPTIONS.length], assets: [makeAsset(ts1Id, videos[1], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── IG Carousel (11:00) — 2 or 3 images
+  const icId = `celia-${ds}-ig-c`;
+  const carouselCap = CELIA_CAROUSEL_CAPTIONS[dayIndex % CELIA_CAROUSEL_CAPTIONS.length];
+  posts.push({ id: icId, modelId: '4', platform: 'instagram', postType: 'instagram_post', scheduledTime: `${ds}T11:00:00`, status: 'scheduled', description: carouselCap.description, imageCaption: carouselCap.caption, assets: carouselImgIds.map((aid, i) => makeAsset(icId, aid, i)), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── TikTok Slideshow (11:00) — same images
+  const tcId = `celia-${ds}-tt-c`;
+  posts.push({ id: tcId, modelId: '4', platform: 'tiktok', postType: 'tiktok_slideshow', scheduledTime: `${ds}T11:00:00`, status: 'scheduled', description: carouselCap.description, imageCaption: carouselCap.caption, assets: carouselImgIds.map((aid, i) => makeAsset(tcId, aid, i)), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── Threads post 1 (9:00)
+  const th1Id = `celia-${ds}-th-1`;
+  posts.push({ id: th1Id, modelId: '4', platform: 'threads', postType: 'threads_post', scheduledTime: `${ds}T09:00:00`, status: 'scheduled', description: CELIA_THREADS_CAPTIONS[(dayIndex * 7 + 0) % CELIA_THREADS_CAPTIONS.length], assets: [makeAsset(th1Id, 'celia-img-1', 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── Threads post 2 (10:30) — 2 images
+  const th2Id = `celia-${ds}-th-2`;
+  posts.push({ id: th2Id, modelId: '4', platform: 'threads', postType: 'threads_post', scheduledTime: `${ds}T10:30:00`, status: 'scheduled', description: CELIA_THREADS_CAPTIONS[(dayIndex * 7 + 1) % CELIA_THREADS_CAPTIONS.length], assets: [makeAsset(th2Id, 'celia-img-2', 0), makeAsset(th2Id, 'celia-img-3', 1)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── IG Reel 2 (13:00) — video[1]
+  const ir2Id = `celia-${ds}-ig-r2`;
+  posts.push({ id: ir2Id, modelId: '4', platform: 'instagram', postType: 'instagram_reel', scheduledTime: `${ds}T13:00:00`, status: 'scheduled', description: CELIA_REEL_CAPTIONS[(dayIndex * 3 + 2) % CELIA_REEL_CAPTIONS.length], assets: [makeAsset(ir2Id, videos[1], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── TikTok Reel 2 (13:00) — video[1]
+  const tr2Id = `celia-${ds}-tt-r2`;
+  posts.push({ id: tr2Id, modelId: '4', platform: 'tiktok', postType: 'tiktok_reel', scheduledTime: `${ds}T13:00:00`, status: 'scheduled', description: CELIA_REEL_CAPTIONS[(dayIndex * 3 + 3) % CELIA_REEL_CAPTIONS.length], assets: [makeAsset(tr2Id, videos[1], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── Threads post 3 (12:00)
+  const th3Id = `celia-${ds}-th-3`;
+  posts.push({ id: th3Id, modelId: '4', platform: 'threads', postType: 'threads_post', scheduledTime: `${ds}T12:00:00`, status: 'scheduled', description: CELIA_THREADS_CAPTIONS[(dayIndex * 7 + 2) % CELIA_THREADS_CAPTIONS.length], assets: [makeAsset(th3Id, 'celia-img-4', 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── Threads post 4 (13:30) — 2 images
+  const th4Id = `celia-${ds}-th-4`;
+  posts.push({ id: th4Id, modelId: '4', platform: 'threads', postType: 'threads_post', scheduledTime: `${ds}T13:30:00`, status: 'scheduled', description: CELIA_THREADS_CAPTIONS[(dayIndex * 7 + 3) % CELIA_THREADS_CAPTIONS.length], assets: [makeAsset(th4Id, 'celia-img-5', 0), makeAsset(th4Id, 'celia-img-6', 1)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── IG Story 2 (15:00)
+  const is2Id = `celia-${ds}-ig-s2`;
+  posts.push({ id: is2Id, modelId: '4', platform: 'instagram', postType: 'instagram_story', scheduledTime: `${ds}T15:00:00`, status: 'scheduled', description: CELIA_STORY_CAPTIONS[(dayIndex + 2) % CELIA_STORY_CAPTIONS.length], assets: [makeAsset(is2Id, carouselImgIds[0], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── TikTok Story 2 (15:00)
+  const ts2Id = `celia-${ds}-tt-s2`;
+  posts.push({ id: ts2Id, modelId: '4', platform: 'tiktok', postType: 'tiktok_story', scheduledTime: `${ds}T15:00:00`, status: 'scheduled', description: CELIA_STORY_CAPTIONS[(dayIndex + 3) % CELIA_STORY_CAPTIONS.length], assets: [makeAsset(ts2Id, videos[2], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── Threads post 5 (15:00)
+  const th5Id = `celia-${ds}-th-5`;
+  posts.push({ id: th5Id, modelId: '4', platform: 'threads', postType: 'threads_post', scheduledTime: `${ds}T15:00:00`, status: 'scheduled', description: CELIA_THREADS_CAPTIONS[(dayIndex * 7 + 4) % CELIA_THREADS_CAPTIONS.length], assets: [makeAsset(th5Id, 'celia-img-7', 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── Threads post 6 (18:00) — 2 images
+  const th6Id = `celia-${ds}-th-6`;
+  posts.push({ id: th6Id, modelId: '4', platform: 'threads', postType: 'threads_post', scheduledTime: `${ds}T18:00:00`, status: 'scheduled', description: CELIA_THREADS_CAPTIONS[(dayIndex * 7 + 5) % CELIA_THREADS_CAPTIONS.length], assets: [makeAsset(th6Id, 'celia-img-8', 0), makeAsset(th6Id, 'celia-img-1', 1)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── IG Story 3 (20:00)
+  const is3Id = `celia-${ds}-ig-s3`;
+  posts.push({ id: is3Id, modelId: '4', platform: 'instagram', postType: 'instagram_story', scheduledTime: `${ds}T20:00:00`, status: 'scheduled', description: CELIA_STORY_CAPTIONS[(dayIndex + 4) % CELIA_STORY_CAPTIONS.length], assets: [makeAsset(is3Id, carouselImgIds[carouselImgIds.length - 1], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── TikTok Story 3 (20:00)
+  const ts3Id = `celia-${ds}-tt-s3`;
+  posts.push({ id: ts3Id, modelId: '4', platform: 'tiktok', postType: 'tiktok_story', scheduledTime: `${ds}T20:00:00`, status: 'scheduled', description: CELIA_STORY_CAPTIONS[(dayIndex + 5) % CELIA_STORY_CAPTIONS.length], assets: [makeAsset(ts3Id, videos[2], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── IG Reel 3 (21:00) — video[2]
+  const ir3Id = `celia-${ds}-ig-r3`;
+  posts.push({ id: ir3Id, modelId: '4', platform: 'instagram', postType: 'instagram_reel', scheduledTime: `${ds}T21:00:00`, status: 'scheduled', description: CELIA_REEL_CAPTIONS[(dayIndex * 3 + 4) % CELIA_REEL_CAPTIONS.length], assets: [makeAsset(ir3Id, videos[2], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── TikTok Reel 3 (21:00) — video[2]
+  const tr3Id = `celia-${ds}-tt-r3`;
+  posts.push({ id: tr3Id, modelId: '4', platform: 'tiktok', postType: 'tiktok_reel', scheduledTime: `${ds}T21:00:00`, status: 'scheduled', description: CELIA_REEL_CAPTIONS[(dayIndex * 3 + 5) % CELIA_REEL_CAPTIONS.length], assets: [makeAsset(tr3Id, videos[2], 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  // ── Threads post 7 (21:00)
+  const th7Id = `celia-${ds}-th-7`;
+  posts.push({ id: th7Id, modelId: '4', platform: 'threads', postType: 'threads_post', scheduledTime: `${ds}T21:00:00`, status: 'scheduled', description: CELIA_THREADS_CAPTIONS[(dayIndex * 7 + 6) % CELIA_THREADS_CAPTIONS.length], assets: [makeAsset(th7Id, 'celia-img-2', 0)], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+
+  return posts;
+}
+
+// Generate 7 days of Celia posts (today through today+6)
+export const mockCeliaPosts: Post[] = Array.from({ length: 7 }, (_, i) =>
+  makeCeliaPostsForDay(addDays(new Date(), i), i)
+).flat();
 
 export const mockPosts: Post[] = [
   // Today - manually specified posts

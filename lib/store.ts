@@ -136,6 +136,7 @@ interface AppState {
   approveAsset: (id: string) => void;
   unapproveAsset: (id: string) => void;
   clearApprovals: () => void;
+  setApprovedAssetIds: (ids: string[]) => void;
 
   // UI state
   showCreatePostModal: boolean;
@@ -464,6 +465,7 @@ export const useStore = create<AppState>((set) => ({
     approvedAssetIds: state.approvedAssetIds.filter((a) => a !== id),
   })),
   clearApprovals: () => set({ approvedAssetIds: [] }),
+  setApprovedAssetIds: (ids) => set({ approvedAssetIds: ids }),
 
   // UI
   showCreatePostModal: false,

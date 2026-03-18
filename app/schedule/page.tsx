@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useStore } from '@/lib/store';
-import { mockModels, mockAdmin, mockPosts } from '@/lib/mockData';
+import { mockModels, mockAdmin, mockPosts, mockCeliaPosts, mockCeliaGalleryAssets, mockCeliaApprovedAssetIds } from '@/lib/mockData';
 import { GalleryAsset, Post, Platform, TimeSlot } from '@/types/models';
 import {
   Film, Heart, MessageCircle, Bookmark, ChevronLeft, ChevronRight,
@@ -1409,14 +1409,17 @@ export default function SchedulePage() {
   const {
     models, selectedModelId, setModels, setSelectedModelId,
     currentUser, setCurrentUser, posts, setPosts,
-    galleryAssets, setGalleryAssets, approvedAssetIds, updatePost,
+    galleryAssets, setGalleryAssets, approvedAssetIds, setApprovedAssetIds, updatePost,
   } = useStore();
 
   useEffect(() => {
     setModels(mockModels);
-    if (!selectedModelId) setSelectedModelId(mockModels[0].id);
+    // Default to Celia (id '4') for the test run
+    if (!selectedModelId) setSelectedModelId('4');
     setCurrentUser(mockAdmin);
-    setPosts(mockPosts);
+    setPosts([...mockPosts, ...mockCeliaPosts]);
+    setGalleryAssets(mockCeliaGalleryAssets);
+    setApprovedAssetIds(mockCeliaApprovedAssetIds);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
