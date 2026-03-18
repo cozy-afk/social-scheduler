@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import { useStore, getVisibleModels } from '@/lib/store';
 import {
   LayoutGrid, Calendar, FileText, Users, BarChart2,
   TrendingUp, Settings, Zap, ChevronDown, CalendarCheck, Copy,
-  Trophy, Film, Layers, BookImage,
+  Trophy, Film, Layers, BookImage, LogOut,
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
@@ -210,6 +211,13 @@ export default function Sidebar() {
             <p className="text-xs font-medium text-zinc-200 truncate">{currentUser?.name || 'Admin'}</p>
             <p className="text-[10px] text-zinc-600 capitalize">{currentUser?.role || 'admin'}</p>
           </div>
+          <button
+            onClick={() => signOut({ callbackUrl: '/auth/splash' })}
+            className="w-6 h-6 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/5 transition-colors flex-shrink-0"
+            title="Sign out"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </aside>

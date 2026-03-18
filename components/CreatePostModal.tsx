@@ -7,28 +7,24 @@ import {
   AlertTriangle, Loader2, Pencil, AlignLeft, AlignCenter, AlignRight,
 } from 'lucide-react';
 import { PostType, Platform, Caption } from '@/types/models';
-import type { ARCheckResult, PostFormat, MediaItem } from '@/types/utils';
+import type { ARCheckResult, MediaItem } from '@/types/utils';
 import ImageEditor, { ImageEditorResult } from './ImageEditor';
 import { PLATFORM_THEMES } from '@/lib/constants/platform';
 import {
   FontKey, StrokeKey, EDITOR_FONTS, EDITOR_STROKES, EDITOR_COLORS, getTextShadow,
 } from '@/lib/constants/editor';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, FanvueIcon } from './PlatformIcons';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Platform → PostType mapping ─────────────────────────────────────────────
 
-const FORMAT_CONFIG: Record<PostFormat, {
-  label: string;
-  description: string;
-  platforms: Platform[];
-  postTypeMap: Partial<Record<Platform, PostType>>;
-}> = {
-  carousel: { label: 'Carousel', description: 'IG Carousel + TikTok Slideshow', platforms: ['instagram', 'tiktok'], postTypeMap: { instagram: 'instagram_post', tiktok: 'tiktok_slideshow' } },
-  reels:    { label: 'Reel',     description: 'Instagram Reel + TikTok Reel',   platforms: ['instagram', 'tiktok'], postTypeMap: { instagram: 'instagram_reel',  tiktok: 'tiktok_reel'       } },
-  threads:  { label: 'Threads',  description: 'Threads post',                   platforms: ['threads'],             postTypeMap: { threads: 'threads_post'                                   } },
-  story:    { label: 'Story',    description: 'Instagram Story',                 platforms: ['instagram'],           postTypeMap: { instagram: 'instagram_story'                              } },
-  x:        { label: 'X Post',   description: 'X (Twitter) post',               platforms: ['x'],                   postTypeMap: { x: 'x_post'                                              } },
+const PLATFORM_POST_TYPES: Record<Platform, { video: PostType; image: PostType }> = {
+  instagram: { video: 'instagram_reel',   image: 'instagram_post'    },
+  tiktok:    { video: 'tiktok_reel',      image: 'tiktok_slideshow'  },
+  threads:   { video: 'threads_post',     image: 'threads_post'      },
+  x:         { video: 'x_post',           image: 'x_post'            },
+  fanvue:    { video: 'fanvue_post',      image: 'fanvue_post'       },
 };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const getPlatformStyle = (platform: Platform) => {
   const theme = PLATFORM_THEMES[platform];
@@ -42,51 +38,18 @@ const getPlatformStyle = (platform: Platform) => {
   };
 };
 
-const FORMAT_TO_IG_POST_TYPE: Record<PostFormat, PostType> = {
-  carousel: 'instagram_post',
-  reels:    'instagram_reel',
-  threads:  'threads_post',
-  story:    'instagram_story',
-  x:        'x_post',
-};
+// ─── Caption variation types ──────────────────────────────────────────────────
 
-function getVideoAspectRatio(file: File): Promise<number | null> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(video.videoWidth / video.videoHeight); };
-    video.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-    video.src = url;
-  });
-}
+type VariationTexts = Record<Platform, { description: string; imageCaption: string }>;
 
-// ─── Library Quick Picks ──────────────────────────────────────────────────────
-
-function LibraryPicks({ captions, postType, onSelect }: {
-  captions: Caption[]; postType: PostType; onSelect: (text: string) => void;
-}) {
-  const relevant = useMemo(() => captions.filter((c) => c.postType === postType).slice(0, 6), [captions, postType]);
-  if (relevant.length === 0) return null;
-  return (
-    <div className="mt-2">
-      <p className="text-[10px] text-slate-500 mb-1.5">
-        From library:
-      </p>
-      <div className="flex flex-wrap gap-1.5">
-        {relevant.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => onSelect(c.text)}
-            className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition-colors"
-          >
-            {c.text.slice(0, 30)}…
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+function makeEmptyVariationTexts(): VariationTexts {
+  return {
+    instagram: { description: '', imageCaption: '' },
+    tiktok:    { description: '', imageCaption: '' },
+    threads:   { description: '', imageCaption: '' },
+    x:         { description: '', imageCaption: '' },
+    fanvue:    { description: '', imageCaption: '' },
+  };
 }
 
 // ─── Media Item Card ──────────────────────────────────────────────────────────
@@ -211,42 +174,30 @@ function PlatformPostSection({
   const patchStyle = (patch: Partial<CaptionStyle>) =>
     onCaptionStyleChange({ ...captionStyle, ...patch });
 
-  // Caption preview text shadow
   const textShadow = getTextShadow(captionStyle.font, captionStyle.stroke, captionStyle.color);
   const fontCfg = EDITOR_FONTS[captionStyle.font];
 
-  // Relevant library captions for this platform
   const libCaptions = captions.filter((c) => c.platform === platform).slice(0, 8);
   const [aiLoading, setAiLoading] = useState(false);
 
   const handleAiGenerate = async () => {
-    if (libCaptions.length === 0) {
-      // Fall back to random if no library entries
-      return;
-    }
+    if (libCaptions.length === 0) return;
     setAiLoading(true);
     try {
       const examples = libCaptions.map((c) => c.text).join('\n---\n');
       const res = await fetch('/api/generate-captions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platform,
-          postType,
-          examples,
-          count: 1,
-        }),
+        body: JSON.stringify({ platform, postType, examples, count: 1 }),
       });
       if (res.ok) {
         const json = await res.json();
         const generated: string = json.captions?.[0] ?? json.caption ?? '';
         if (generated) onDescriptionChange(generated);
       } else {
-        // Fallback: pick random from library
         onDescriptionChange(libCaptions[Math.floor(Math.random() * libCaptions.length)].text);
       }
     } catch {
-      // Fallback: pick random from library
       if (libCaptions.length > 0) {
         onDescriptionChange(libCaptions[Math.floor(Math.random() * libCaptions.length)].text);
       }
@@ -514,7 +465,6 @@ interface CreatePostModalProps {
 export default function CreatePostModal({ onClose }: CreatePostModalProps) {
   const { setShowCreatePostModal } = useStore();
 
-  // Default onClose to close via store if not provided
   const handleClose = useCallback(() => {
     if (onClose) {
       onClose();
@@ -522,25 +472,35 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
       setShowCreatePostModal(false);
     }
   }, [onClose, setShowCreatePostModal]);
-  const { models, selectedModelId, posts, captions, addPost, editingPost, setEditingPost } = useStore();
+
+  const { models, selectedModelId, captions, addPost, editingPost, setEditingPost } = useStore();
   const selectedModel = models.find((m) => m.id === selectedModelId);
 
-  const [format, setFormat] = useState<PostFormat>('carousel');
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [arCheckResults, setArCheckResults] = useState<Record<number, ARCheckResult>>({});
+
+  // Platform scheduling config (no caption text here)
   const [platformData, setPlatformData] = useState<Record<Platform, {
     scheduledTime: string;
-    description: string;
-    imageCaption: string;
     captionStyle: CaptionStyle;
     enabled: boolean;
   }>>({
-    instagram: { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
-    tiktok:    { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
-    threads:   { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
-    x:         { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
-    fanvue:    { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
+    instagram: { scheduledTime: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
+    tiktok:    { scheduledTime: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
+    threads:   { scheduledTime: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
+    x:         { scheduledTime: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
+    fanvue:    { scheduledTime: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
   });
+
+  // Caption variations for A/B testing
+  const [captionVariations, setCaptionVariations] = useState<Array<{
+    id: string;
+    label: string;
+    texts: VariationTexts;
+  }>>([{ id: 'v1', label: 'A', texts: makeEmptyVariationTexts() }]);
+  const [activeVarIdx, setActiveVarIdx] = useState(0);
+  const [unifiedMode, setUnifiedMode] = useState(false);
+
   const [uploading, setUploading] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [editingItem, setEditingItem] = useState<{ index: number; item: MediaItem } | null>(null);
@@ -550,9 +510,7 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
   // Handle Escape key to close modal
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        handleClose();
-      }
+      if (e.key === 'Escape') handleClose();
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
@@ -561,19 +519,6 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
   // Initialize from editing post
   useEffect(() => {
     if (editingPost) {
-      setFormat(
-        editingPost.postType.startsWith('instagram_')
-          ? editingPost.postType === 'instagram_reel'
-            ? 'reels'
-            : editingPost.postType === 'instagram_story'
-            ? 'story'
-            : 'carousel'
-          : editingPost.postType.startsWith('tiktok_')
-          ? 'reels'
-          : editingPost.postType === 'threads_post'
-          ? 'threads'
-          : 'x'
-      );
       setMediaItems(
         editingPost.assets.map((asset) => ({
           id: asset.id,
@@ -586,27 +531,59 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
         }))
       );
       setPlatformData({
-        instagram: { scheduledTime: editingPost.scheduledTime.slice(0, 16), description: editingPost.description, imageCaption: editingPost.imageCaption ?? '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'instagram' },
-        tiktok:    { scheduledTime: editingPost.scheduledTime.slice(0, 16), description: editingPost.description, imageCaption: editingPost.imageCaption ?? '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'tiktok'    },
-        threads:   { scheduledTime: editingPost.scheduledTime.slice(0, 16), description: editingPost.description, imageCaption: editingPost.imageCaption ?? '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'threads'   },
-        x:         { scheduledTime: editingPost.scheduledTime.slice(0, 16), description: editingPost.description, imageCaption: editingPost.imageCaption ?? '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'x'         },
-        fanvue:    { scheduledTime: '', description: '', imageCaption: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
+        instagram: { scheduledTime: editingPost.scheduledTime.slice(0, 16), captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'instagram' },
+        tiktok:    { scheduledTime: editingPost.scheduledTime.slice(0, 16), captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'tiktok'    },
+        threads:   { scheduledTime: editingPost.scheduledTime.slice(0, 16), captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'threads'   },
+        x:         { scheduledTime: editingPost.scheduledTime.slice(0, 16), captionStyle: DEFAULT_CAPTION_STYLE, enabled: editingPost.platform === 'x'         },
+        fanvue:    { scheduledTime: '', captionStyle: DEFAULT_CAPTION_STYLE, enabled: false },
       });
+      setCaptionVariations([{
+        id: 'v1',
+        label: 'A',
+        texts: {
+          instagram: { description: editingPost.description, imageCaption: editingPost.imageCaption ?? '' },
+          tiktok:    { description: editingPost.description, imageCaption: editingPost.imageCaption ?? '' },
+          threads:   { description: editingPost.description, imageCaption: editingPost.imageCaption ?? '' },
+          x:         { description: editingPost.description, imageCaption: editingPost.imageCaption ?? '' },
+          fanvue:    { description: '', imageCaption: '' },
+        },
+      }]);
+      setActiveVarIdx(0);
     }
   }, [editingPost]);
 
-  // Enable/disable platforms based on format
-  useEffect(() => {
-    const formatConfig = FORMAT_CONFIG[format];
-    setPlatformData((prev) =>
-      Object.fromEntries(
-        Object.entries(prev).map(([platform, data]) => [
-          platform,
-          { ...data, enabled: formatConfig.platforms.includes(platform as Platform) },
-        ])
-      ) as typeof prev
-    );
-  }, [format]);
+  // ── Variation helpers ──────────────────────────────────────────────────────
+
+  const getVarText = useCallback((platform: Platform) =>
+    captionVariations[activeVarIdx].texts[platform],
+  [captionVariations, activeVarIdx]);
+
+  const setVarText = useCallback((platform: Platform, field: 'description' | 'imageCaption', value: string) => {
+    setCaptionVariations(prev => {
+      const next = [...prev];
+      const variation = { ...next[activeVarIdx], texts: { ...next[activeVarIdx].texts } };
+      if (unifiedMode) {
+        const allEnabled = (['instagram', 'tiktok', 'threads', 'x'] as Platform[]).filter(p => platformData[p].enabled);
+        for (const p of allEnabled) {
+          variation.texts[p] = { ...variation.texts[p], [field]: value };
+        }
+      } else {
+        variation.texts[platform] = { ...variation.texts[platform], [field]: value };
+      }
+      next[activeVarIdx] = variation;
+      return next;
+    });
+  }, [captionVariations, activeVarIdx, unifiedMode, platformData]);
+
+  const addVariation = useCallback(() => {
+    const newId = `v${captionVariations.length + 1}`;
+    const label = String.fromCharCode(65 + captionVariations.length); // A, B, C...
+    const cloned: VariationTexts = JSON.parse(JSON.stringify(captionVariations[activeVarIdx].texts));
+    setCaptionVariations(prev => [...prev, { id: newId, label, texts: cloned }]);
+    setActiveVarIdx(captionVariations.length);
+  }, [captionVariations, activeVarIdx]);
+
+  // ── File upload ────────────────────────────────────────────────────────────
 
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -615,7 +592,6 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
 
       setUploading(true);
       const newItems: MediaItem[] = [];
-      const newArChecks: Record<number, ARCheckResult> = {};
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -630,10 +606,9 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
           file,
         };
 
-        // Check aspect ratio for images
         if (!isVideo) {
           const itemIndex = mediaItems.length + newItems.length;
-          const img = new Image();
+          const img = new globalThis.Image();
           img.onload = () => {
             try {
               const ratio = img.width / img.height;
@@ -657,11 +632,21 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
         newItems.push(item);
       }
 
-      setMediaItems((prev) => [...prev, ...newItems]);
+      const allItems = [...mediaItems, ...newItems];
+      setMediaItems(allItems);
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+
+      // Enable Instagram and TikTok by default on first upload
+      if (mediaItems.length === 0 && newItems.length > 0) {
+        setPlatformData((prev) => ({
+          ...prev,
+          instagram: { ...prev.instagram, enabled: true },
+          tiktok:    { ...prev.tiktok,    enabled: true },
+        }));
+      }
     },
-    [format, mediaItems.length]
+    [mediaItems]
   );
 
   const handleRemoveItem = useCallback((index: number) => {
@@ -697,46 +682,45 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
     [editingItem, mediaItems]
   );
 
+  // ── Schedule ───────────────────────────────────────────────────────────────
+
   const handleScheduleAll = useCallback(async () => {
     if (!selectedModel) return;
 
     setScheduling(true);
-    const formatConfig = FORMAT_CONFIG[format];
+    const hasVideo = mediaItems.some((i) => i.type === 'video');
+    const PLATFORMS: Platform[] = ['instagram', 'tiktok', 'threads', 'x'];
 
-    // Schedule post for each enabled platform
-    for (const platform of formatConfig.platforms) {
-      const data = platformData[platform];
-      if (!data.enabled || !data.scheduledTime) continue;
+    // Schedule post for each enabled platform × each variation
+    for (const variation of captionVariations) {
+      for (const platform of PLATFORMS) {
+        const config = platformData[platform];
+        if (!config.enabled || !config.scheduledTime) continue;
 
-      const postType = formatConfig.postTypeMap[platform];
-      if (!postType) continue;
+        const postType = PLATFORM_POST_TYPES[platform][hasVideo ? 'video' : 'image'];
+        const texts = variation.texts[platform];
 
-      const newPost = {
-        id: editingPost?.id || `post-${Date.now()}-${platform}`,
-        modelId: selectedModel.id,
-        platform,
-        postType,
-        scheduledTime: data.scheduledTime + ':00',
-        status: 'scheduled' as const,
-        description: data.description,
-        imageCaption: data.imageCaption || undefined,
-        assets: mediaItems.map((item, idx) => ({
-          id: `asset-${Date.now()}-${idx}`,
-          postId: editingPost?.id || `post-${Date.now()}-${platform}`,
-          fileUrl: item.url,
-          fileName: item.name,
-          fileType: item.type,
-          order: idx + 1,
-        })),
-        createdAt: editingPost?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+        const newPost = {
+          id: `post-${Date.now()}-${platform}-${variation.id}`,
+          modelId: selectedModel.id,
+          platform,
+          postType,
+          scheduledTime: config.scheduledTime + ':00',
+          status: 'scheduled' as const,
+          description: texts.description,
+          imageCaption: texts.imageCaption || undefined,
+          assets: mediaItems.map((item, idx) => ({
+            id: `asset-${Date.now()}-${idx}`,
+            postId: '',
+            fileUrl: item.url,
+            fileName: item.name,
+            fileType: item.type,
+            order: idx + 1,
+          })),
+          createdAt: editingPost?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
 
-      if (editingPost) {
-        // Update existing post
-        // Note: In real app, you'd call updatePost instead of addPost
-        addPost(newPost);
-      } else {
         addPost(newPost);
       }
     }
@@ -744,25 +728,25 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
     setScheduling(false);
     setEditingPost(null);
     handleClose();
-  }, [selectedModel, format, platformData, mediaItems, editingPost, addPost, setEditingPost, handleClose]);
+  }, [selectedModel, platformData, captionVariations, mediaItems, editingPost, addPost, setEditingPost, handleClose]);
+
+  // ── Derived ────────────────────────────────────────────────────────────────
 
   const hasAnyMedia = mediaItems.length > 0;
   const hasInvalidAr = Object.values(arCheckResults).some((r) => !r.valid);
-  const formatConfig = FORMAT_CONFIG[format];
+  const enabledPlatforms = (['instagram', 'tiktok', 'threads', 'x'] as Platform[]).filter((p) => platformData[p].enabled);
+  const totalPosts = enabledPlatforms.length * captionVariations.length;
 
-  // Close on Escape key
+  // Memoised so PlatformPostSection renders don't re-derive this
+  const hasVideo = useMemo(() => mediaItems.some((i) => i.type === 'video'), [mediaItems]);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      handleClose();
-    }
-  }, [onClose]);
+    if (e.key === 'Escape') handleClose();
+  }, [handleClose]);
 
-  // Close when clicking backdrop
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      handleClose();
-    }
-  }, [onClose]);
+    if (e.target === e.currentTarget) handleClose();
+  }, [handleClose]);
 
   return (
     <div
@@ -784,36 +768,6 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Format Selection */}
-          <div>
-            <label className="text-sm font-medium text-slate-300 mb-3 block">Post Format</label>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-              {Object.entries(FORMAT_CONFIG).map(([key, config]) => {
-                const formatIcon = key === 'carousel' ? <InstagramIcon size={32} /> :
-                                   key === 'reels' ? <TikTokIcon size={32} /> :
-                                   key === 'threads' ? <ThreadsIcon size={32} /> :
-                                   key === 'story' ? <InstagramIcon size={32} /> :
-                                   <XIcon size={32} />;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setFormat(key as PostFormat)}
-                    className={`p-3 rounded-xl border text-center transition-all ${
-                      format === key
-                        ? 'bg-blue-600 border-blue-500 text-white'
-                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
-                    }`}
-                  >
-                    <div className="text-2xl mb-1">{formatIcon}</div>
-                    <div className="text-xs font-medium">{config.label}</div>
-                    <div className="text-[10px] opacity-75 mt-0.5">{config.description}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Media Upload */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -878,27 +832,124 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
             )}
           </div>
 
-          {/* Per-platform sections — each has its own Caption overlay + Description */}
+          {/* Platform Selection */}
           <div>
-            <label className="text-sm font-semibold text-white mb-3 block">Platform Captions</label>
+            <label className="text-sm font-medium text-slate-300 mb-3 block">Publish To</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {(['instagram', 'tiktok', 'threads', 'x'] as Platform[]).map((platform) => {
+                const typeLabel = platform === 'instagram' ? (hasVideo ? 'Reel' : 'Post')
+                                : platform === 'tiktok'    ? (hasVideo ? 'Reel' : 'Slideshow')
+                                : platform === 'threads'   ? 'Post'
+                                : 'Post';
+                const theme = PLATFORM_THEMES[platform];
+                const IconComp = theme.icon;
+                const enabled = platformData[platform].enabled;
+                return (
+                  <button
+                    key={platform}
+                    type="button"
+                    onClick={() => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], enabled: !prev[platform].enabled } }))}
+                    className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center gap-1.5 ${
+                      enabled
+                        ? 'border-violet-500/60 bg-violet-600/15 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    <IconComp size={24} />
+                    <span className="text-xs font-semibold capitalize">{platform === 'x' ? 'X (Twitter)' : platform}</span>
+                    <span className="text-[10px] opacity-60">{typeLabel}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Platform Captions */}
+          <div>
+            {/* Section header with variation tabs and unified toggle */}
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <label className="text-sm font-semibold text-white">Platform Captions</label>
+              <div className="flex items-center gap-2">
+                {/* Unified toggle */}
+                <button
+                  type="button"
+                  onClick={() => setUnifiedMode(v => !v)}
+                  className={`text-xs px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 ${
+                    unifiedMode
+                      ? 'border-violet-500/60 bg-violet-600/15 text-violet-300'
+                      : 'border-white/10 text-zinc-400 hover:border-white/20'
+                  }`}
+                >
+                  <Check className={`w-3 h-3 ${unifiedMode ? 'opacity-100' : 'opacity-0'}`} />
+                  Same for all
+                </button>
+              </div>
+            </div>
+
+            {/* Variation tabs */}
+            {enabledPlatforms.length > 0 && (
+              <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+                {captionVariations.map((v, idx) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setActiveVarIdx(idx)}
+                    className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium ${
+                      activeVarIdx === idx
+                        ? 'border-violet-500/60 bg-violet-600/20 text-white'
+                        : 'border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-300'
+                    }`}
+                  >
+                    Version {v.label}
+                  </button>
+                ))}
+                {captionVariations.length < 5 && (
+                  <button
+                    type="button"
+                    onClick={addVariation}
+                    className="text-xs px-2.5 py-1.5 rounded-lg border border-dashed border-white/15 text-zinc-500 hover:border-violet-500/40 hover:text-violet-400 transition-all"
+                    title="Add caption variation for A/B testing"
+                  >
+                    + Add variation
+                  </button>
+                )}
+                {captionVariations.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCaptionVariations(prev => prev.filter((_, i) => i !== activeVarIdx));
+                      setActiveVarIdx(Math.max(0, activeVarIdx - 1));
+                    }}
+                    className="text-xs px-2 py-1.5 rounded-lg border border-white/10 text-zinc-600 hover:border-red-500/40 hover:text-red-400 transition-all"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Platform sections */}
             <div className="flex flex-col gap-4">
-              {formatConfig.platforms.map((platform) => (
-                <PlatformPostSection
-                  key={platform}
-                  platform={platform}
-                  postType={formatConfig.postTypeMap[platform]!}
-                  scheduledTime={platformData[platform].scheduledTime}
-                  onTimeChange={(time) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], scheduledTime: time } }))}
-                  imageCaption={platformData[platform].imageCaption}
-                  onImageCaptionChange={(text) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], imageCaption: text } }))}
-                  captionStyle={platformData[platform].captionStyle}
-                  onCaptionStyleChange={(style) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], captionStyle: style } }))}
-                  description={platformData[platform].description}
-                  onDescriptionChange={(text) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], description: text } }))}
-                  previewMediaUrl={mediaItems[0]?.type === 'image' ? mediaItems[0]?.url : undefined}
-                  captions={captions}
-                />
-              ))}
+              {(['instagram', 'tiktok', 'threads', 'x'] as Platform[]).filter((p) => platformData[p].enabled).map((platform) => {
+                const postType = PLATFORM_POST_TYPES[platform][hasVideo ? 'video' : 'image'];
+                return (
+                  <PlatformPostSection
+                    key={`${platform}-${activeVarIdx}`}
+                    platform={platform}
+                    postType={postType}
+                    scheduledTime={platformData[platform].scheduledTime}
+                    onTimeChange={(time) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], scheduledTime: time } }))}
+                    imageCaption={getVarText(platform).imageCaption}
+                    onImageCaptionChange={(text) => setVarText(platform, 'imageCaption', text)}
+                    captionStyle={platformData[platform].captionStyle}
+                    onCaptionStyleChange={(style) => setPlatformData((prev) => ({ ...prev, [platform]: { ...prev[platform], captionStyle: style } }))}
+                    description={getVarText(platform).description}
+                    onDescriptionChange={(text) => setVarText(platform, 'description', text)}
+                    previewMediaUrl={mediaItems[0]?.type === 'image' ? mediaItems[0]?.url : undefined}
+                    captions={captions}
+                  />
+                );
+              })}
             </div>
           </div>
 
@@ -910,7 +961,7 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
             <button
               type="button"
               onClick={handleScheduleAll}
-              disabled={!hasAnyMedia || hasInvalidAr || scheduling}
+              disabled={!hasAnyMedia || hasInvalidAr || scheduling || enabledPlatforms.length === 0 || Object.values(platformData).every(p => !p.enabled || !p.scheduledTime)}
               className="btn-primary text-sm py-2 px-6 flex items-center gap-2 disabled:opacity-40"
             >
               {scheduling ? (
@@ -921,7 +972,10 @@ export default function CreatePostModal({ onClose }: CreatePostModalProps) {
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  Schedule {formatConfig.platforms.length} Platform{formatConfig.platforms.length > 1 ? 's' : ''}
+                  Schedule {totalPosts} Post{totalPosts !== 1 ? 's' : ''}
+                  {captionVariations.length > 1 && (
+                    <span className="text-[10px] opacity-70">({captionVariations.length} variations × {enabledPlatforms.length} platforms)</span>
+                  )}
                 </>
               )}
             </button>

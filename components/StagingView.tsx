@@ -210,13 +210,13 @@ function CaptionPanel({
                 </div>
 
                 {/* Preview */}
-                <div className="relative w-full aspect-video rounded-xl overflow-hidden" style={{ background: '#000' }}>
+                <div className="relative w-full rounded-xl overflow-hidden" style={{ background: '#000', aspectRatio: '4/5' }}>
                   <img src={previewUrl} alt="" className="w-full h-full object-contain" />
                   {/* Live CSS preview of text when not yet rendered */}
                   {text.trim() && !renderedUrl && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-4">
-                      <p className="text-white text-center font-bold text-base leading-snug"
-                        style={{ textShadow: '0 2px 8px rgba(0,0,0,0.7)', maxWidth: '85%', wordBreak: 'break-word' }}>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ padding: '8% 14%' }}>
+                      <p className="text-white text-center font-bold text-base leading-snug w-full"
+                        style={{ textShadow: '0 2px 8px rgba(0,0,0,0.8)', wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap' }}>
                         {text}
                       </p>
                     </div>

@@ -161,7 +161,7 @@ function renderTikTokText(
   const pos = getPositionCoordinates(style.position, style.customPosition);
   const x = pos.x * imageWidth;
   const y = pos.y * imageHeight;
-  const maxTextWidth = imageWidth * 0.85; // 85% of image width with padding
+  const maxTextWidth = imageWidth * 0.72; // 72% — keeps text off edges on mobile (safe-zone)
 
   // Wrap text to fit
   const lines = wrapText(ctx, text, maxTextWidth, fontSize * lineHeight);

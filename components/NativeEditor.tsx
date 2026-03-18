@@ -34,6 +34,8 @@ export interface EditorResult {
   textLayers: TextLayer[];
   emojiLayers: EmojiLayer[];
   cropRatio: CropRatio;
+  cropOffset: { x: number; y: number };
+  renderedUrl?: string;
 }
 
 interface NativeEditorProps {
@@ -85,6 +87,7 @@ export default function NativeEditor({ mediaUrl, mediaType, initialResult, onSav
   const [filter, setFilter]                 = useState(initialResult?.filter ?? 'none');
   const [filterLabel, setFilterLabel]       = useState(initialResult?.filterLabel ?? 'Normal');
   const [cropRatio, setCropRatio]           = useState<CropRatio>(initialResult?.cropRatio ?? 'original');
+  const [cropOffset, setCropOffset]         = useState(initialResult?.cropOffset ?? { x: 50, y: 50 });
   const [textLayers, setTextLayers]         = useState<TextLayer[]>(initialResult?.textLayers ?? []);
   const [emojiLayers, setEmojiLayers]       = useState<EmojiLayer[]>(initialResult?.emojiLayers ?? []);
   const [newText, setNewText]               = useState('');
@@ -102,6 +105,18 @@ export default function NativeEditor({ mediaUrl, mediaType, initialResult, onSav
     origX: number;
     origY: number;
   } | null>(null);
+
+  const cropDragRef = useRef<{
+    startX: number;
+    startY: number;
+    startOx: number;
+    startOy: number;
+  } | null>(null);
+
+  const handleCropMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    cropDragRef.current = { startX: e.clientX, startY: e.clientY, startOx: cropOffset.x, startOy: cropOffset.y };
+  }, [cropOffset]);
 
   const handleAddText = useCallback(() => {
     if (!newText.trim()) return;
@@ -134,6 +149,16 @@ export default function NativeEditor({ mediaUrl, mediaType, initialResult, onSav
   );
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    // Crop pan
+    const cd = cropDragRef.current;
+    if (cd && mediaAreaRef.current) {
+      const rect = mediaAreaRef.current.getBoundingClientRect();
+      const newX = Math.max(0, Math.min(100, cd.startOx - ((e.clientX - cd.startX) / rect.width) * 100));
+      const newY = Math.max(0, Math.min(100, cd.startOy - ((e.clientY - cd.startY) / rect.height) * 100));
+      setCropOffset({ x: newX, y: newY });
+      return;
+    }
+    // Layer drag
     const d = dragRef.current;
     if (!d || !mediaAreaRef.current) return;
     const rect = mediaAreaRef.current.getBoundingClientRect();
@@ -146,7 +171,134 @@ export default function NativeEditor({ mediaUrl, mediaType, initialResult, onSav
     }
   }, []);
 
-  const handleMouseUp = useCallback(() => { dragRef.current = null; }, []);
+  const handleMouseUp = useCallback(() => {
+    dragRef.current = null;
+    cropDragRef.current = null;
+  }, []);
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Build a same-origin URL for canvas use — proxies R2 signed URLs through our API
+  const canvasMediaUrl = (() => {
+    try {
+      const u = new URL(mediaUrl);
+      if (u.hostname.includes('r2.cloudflarestorage.com') || u.hostname.includes('r2.dev')) {
+        const key = decodeURIComponent(u.pathname.slice(1));
+        return `/api/r2/proxy?key=${encodeURIComponent(key)}`;
+      }
+    } catch { /* relative or blob URL — use as-is */ }
+    return mediaUrl;
+  })();
+
+  const handleDone = useCallback(async () => {
+    const hasLayers = textLayers.length > 0 || emojiLayers.length > 0;
+    const hasFilter = filter && filter !== 'none';
+    const hasCrop = cropRatio !== 'original' || cropOffset.x !== 50 || cropOffset.y !== 50;
+    const mediaAreaEl = mediaAreaRef.current;
+
+    if ((hasLayers || hasFilter || hasCrop) && mediaType === 'image' && mediaAreaEl) {
+      setIsSaving(true);
+      try {
+        const img = new Image();
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = reject;
+          img.src = canvasMediaUrl;
+        });
+
+        // ── Crop math: mirror CSS object-cover + object-position ──────────
+        const cropAspects: Record<CropRatio, number> = {
+          original: 4 / 5, '1:1': 1, '4:5': 4 / 5, '9:16': 9 / 16,
+        };
+        const cropAspect = cropAspects[cropRatio];
+        const imgAspect = img.naturalWidth / img.naturalHeight;
+
+        let srcX = 0, srcY = 0, srcW = img.naturalWidth, srcH = img.naturalHeight;
+
+        if (imgAspect > cropAspect) {
+          // Image wider than crop — overflow on X axis
+          srcH = img.naturalHeight;
+          srcW = Math.round(srcH * cropAspect);
+          const overflowX = img.naturalWidth - srcW;
+          srcX = Math.round((cropOffset.x / 100) * overflowX);
+        } else {
+          // Image taller than crop — overflow on Y axis
+          srcW = img.naturalWidth;
+          srcH = Math.round(srcW / cropAspect);
+          const overflowY = img.naturalHeight - srcH;
+          srcY = Math.round((cropOffset.y / 100) * overflowY);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = srcW;
+        canvas.height = srcH;
+        const ctx = canvas.getContext('2d')!;
+        const mediaHeight = mediaAreaEl.clientHeight;
+        const scaleF = srcH / mediaHeight;
+
+        if (hasFilter) ctx.filter = filter;
+        ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height);
+        ctx.filter = 'none';
+
+        for (const layer of textLayers) {
+          const font = EDITOR_FONTS[layer.fontKey];
+          const scaledSize = layer.fontSize * scaleF;
+          const cx = (layer.x / 100) * canvas.width;
+          const cy = (layer.y / 100) * canvas.height;
+
+          ctx.font = `${font.weight} ${scaledSize}px ${font.family}`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          // Stroke layer
+          if (layer.stroke === 'light') {
+            ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+            ctx.lineWidth = scaledSize * 0.06;
+            ctx.strokeText(layer.text, cx, cy);
+          } else if (layer.stroke === 'bold') {
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = scaledSize * 0.12;
+            ctx.strokeText(layer.text, cx, cy);
+          } else if (layer.stroke === 'white') {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = scaledSize * 0.06;
+            ctx.strokeText(layer.text, cx, cy);
+          }
+
+          if (layer.fontKey === 'neon') {
+            ctx.shadowColor = layer.color;
+            ctx.shadowBlur  = scaledSize * 0.5;
+          } else {
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowBlur  = scaledSize * 0.12;
+          }
+          ctx.fillStyle = layer.color;
+          ctx.fillText(layer.text, cx, cy);
+          ctx.shadowBlur = 0;
+        }
+
+        for (const layer of emojiLayers) {
+          const scaledSize = layer.size * scaleF;
+          const cx = (layer.x / 100) * canvas.width;
+          const cy = (layer.y / 100) * canvas.height;
+          ctx.font = `${scaledSize}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(layer.emoji, cx, cy);
+        }
+
+        const renderedUrl = canvas.toDataURL('image/jpeg', 0.92);
+        setIsSaving(false);
+        onSave({ filter, filterLabel, textLayers, emojiLayers, cropRatio, cropOffset, renderedUrl });
+        return;
+      } catch (err) {
+        console.error('[NativeEditor] canvas bake failed:', err);
+        setIsSaving(false);
+      }
+    }
+
+    onSave({ filter, filterLabel, textLayers, emojiLayers, cropRatio, cropOffset });
+  }, [filter, filterLabel, textLayers, emojiLayers, cropRatio, cropOffset, canvasMediaUrl, mediaType, onSave]);
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col" style={{ background: '#000' }}>
@@ -165,11 +317,12 @@ export default function NativeEditor({ mediaUrl, mediaType, initialResult, onSav
         </button>
         <span className="text-white text-sm font-semibold tracking-tight">Edit</span>
         <button
-          onClick={() => onSave({ filter, filterLabel, textLayers, emojiLayers, cropRatio })}
-          className="px-5 py-1.5 rounded-full text-sm font-bold text-white transition-all active:scale-95"
+          onClick={handleDone}
+          disabled={isSaving}
+          className="px-5 py-1.5 rounded-full text-sm font-bold text-white transition-all active:scale-95 disabled:opacity-60"
           style={{ background: 'var(--accent-violet)' }}
         >
-          Done
+          {isSaving ? 'Saving…' : 'Done'}
         </button>
       </div>
 
@@ -194,17 +347,32 @@ export default function NativeEditor({ mediaUrl, mediaType, initialResult, onSav
               alt=""
               draggable={false}
               className="w-full h-full object-cover select-none"
-              style={{ filter: filter !== 'none' ? filter : undefined }}
+              style={{
+                filter: filter !== 'none' ? filter : undefined,
+                objectPosition: `${cropOffset.x}% ${cropOffset.y}%`,
+              }}
             />
           ) : (
             <video
               src={mediaUrl}
               className="w-full h-full object-cover"
-              style={{ filter: filter !== 'none' ? filter : undefined }}
+              style={{
+                filter: filter !== 'none' ? filter : undefined,
+                objectPosition: `${cropOffset.x}% ${cropOffset.y}%`,
+              }}
               autoPlay
               loop
               muted
               playsInline
+            />
+          )}
+
+          {/* Crop drag overlay — transparent layer that captures drag to pan the image */}
+          {activeTab === 'crop' && (
+            <div
+              className="absolute inset-0"
+              style={{ zIndex: 5, cursor: cropDragRef.current ? 'grabbing' : 'grab' }}
+              onMouseDown={handleCropMouseDown}
             />
           )}
 

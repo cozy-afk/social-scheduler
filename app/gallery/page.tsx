@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useStore, getVisibleModels } from '@/lib/store';
 import { mockModels, mockAdmin, mockPostReferences } from '@/lib/mockData';
 import { AuthGuard } from '@/components/AuthGuard';
@@ -158,27 +159,31 @@ function AssetThumbnail({
   showVirality: boolean;
   viralityAnalysis?: ViralityAnalysis;
 }) {
+  const isVideo = asset.fileType === 'video';
   const isOkRatio = asset.aspectRatio
     ? Math.abs(asset.aspectRatio - 1.0) < 0.03 || Math.abs(asset.aspectRatio - 0.8) < 0.03
     : true;
 
   return (
     <div
-      onClick={onToggle}
-      className={`relative group aspect-square cursor-pointer rounded-xl overflow-hidden border-2 transition-all duration-150 ${
+      // Videos: click tile = play. Images: click tile = select.
+      onClick={isVideo ? onPreviewVideo : onToggle}
+      className={`relative group aspect-square rounded-xl overflow-hidden border-2 transition-all duration-150 ${
+        isVideo ? 'cursor-pointer' : 'cursor-pointer'
+      } ${
         approved
           ? 'border-green-500 shadow-green-500/20 shadow-lg'
           : selected
           ? 'border-violet-500 shadow-violet-500/30 shadow-lg'
           : isPosted
           ? 'border-emerald-600/60 hover:border-emerald-500'
+          : isVideo
+          ? 'border-white/15 hover:border-white/30'
           : 'border-white/10 hover:border-white/20'
       }`}
     >
       <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-        {asset.fileType === 'video' ? (
-          // VideoThumbnail loads the video lazily via IntersectionObserver,
-          // only fetching metadata (first frame) once the cell is near the viewport.
+        {isVideo ? (
           <VideoThumbnail src={asset.fileUrl} fileName={asset.fileName} />
         ) : asset.fileUrl ? (
           <img src={asset.fileUrl} alt={asset.fileName} loading="lazy" decoding="async" draggable={false} className="w-full h-full object-cover" />
@@ -197,17 +202,21 @@ function AssetThumbnail({
 
       <div className={`absolute inset-0 transition-all duration-150 ${selected ? 'bg-violet-500/20' : 'group-hover:bg-black/20'}`} />
 
-      {/* Video play button — centered, opens lightbox */}
-      {asset.fileType === 'video' && (
-        <button
-          onClick={onPreviewVideo}
-          className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-          title="Watch video"
-        >
-          <div className="w-12 h-12 rounded-full bg-black/70 flex items-center justify-center border border-white/20 hover:bg-black/90 transition-colors">
-            <Play className="w-5 h-5 text-white ml-0.5" fill="white" />
+      {/* Video: always-visible play button + "VIDEO" badge */}
+      {isVideo && (
+        <>
+          {/* Play icon — always visible, brightens on hover */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-11 h-11 rounded-full bg-black/60 group-hover:bg-black/85 flex items-center justify-center border border-white/25 transition-all group-hover:scale-110">
+              <Play className="w-5 h-5 text-white ml-0.5" fill="white" />
+            </div>
           </div>
-        </button>
+          {/* VIDEO type badge */}
+          <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/70 border border-white/15 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md pointer-events-none">
+            <Film className="w-2.5 h-2.5" />
+            VIDEO
+          </div>
+        </>
       )}
 
       {/* Virality score badge */}
@@ -224,22 +233,41 @@ function AssetThumbnail({
         </div>
       )}
 
-      {/* Select checkbox */}
-      <div className={`absolute top-2 left-2 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-        selected ? 'bg-violet-600 border-violet-500' : 'bg-black/60 border-white/30 opacity-0 group-hover:opacity-100'
-      } ${asset.fileType === 'video' ? 'top-9' : ''}`}>
-        {selected && <Check className="w-3 h-3 text-white" />}
+      {/* Select checkbox — for videos, always visible since tile click plays instead of selects */}
+      <div
+        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        title={selected ? 'Deselect' : 'Select for scheduling'}
+        className={`absolute top-2 left-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer z-10 ${
+          selected
+            ? 'bg-violet-600 border-violet-400 opacity-100'
+            : isVideo
+            ? 'bg-black/70 border-white/40 opacity-100 hover:border-violet-400'
+            : 'bg-black/60 border-white/30 opacity-0 group-hover:opacity-100 hover:border-violet-400'
+        }`}
+      >
+        {selected
+          ? <Check className="w-3.5 h-3.5 text-white" />
+          : isVideo
+          ? <span className="w-2 h-2 rounded-full border border-white/40" />
+          : null
+        }
       </div>
 
-      {/* Quick approve button — top right (visible on hover, or always when approved) */}
+      {/* Quick approve button — top right for images; bottom-left for videos (top-right is VIDEO badge) */}
       <button
         onClick={onApprove}
         title={approved ? 'Remove approval' : 'Approve for scheduling'}
-        className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+        className={`absolute w-6 h-6 rounded-full flex items-center justify-center transition-all z-10 ${
           approved
             ? 'bg-green-500 opacity-100'
             : 'bg-black/60 opacity-0 group-hover:opacity-100 hover:bg-green-500/80'
-        } ${showVirality && asset.fileType === 'image' && viralityAnalysis ? 'top-9' : ''}`}
+        } ${
+          isVideo
+            ? 'bottom-2 left-9'
+            : showVirality && viralityAnalysis
+            ? 'top-9 right-2'
+            : 'top-2 right-2'
+        }`}
       >
         <ThumbsUp className="w-3 h-3 text-white" />
       </button>
@@ -267,18 +295,21 @@ function AssetThumbnail({
         </div>
       )}
 
-      <div className={`absolute bottom-2 right-2 text-[9px] px-1.5 py-0.5 rounded font-medium ${
-        isOkRatio ? 'bg-green-500/80 text-white' : 'bg-red-500/80 text-white'
-      }`}>
-        {formatRatio(asset.aspectRatio)}
-      </div>
+      {/* Aspect ratio badge — images only; videos show nothing at bottom-right */}
+      {!isVideo && (
+        <div className={`absolute bottom-2 right-2 text-[9px] px-1.5 py-0.5 rounded font-medium ${
+          isOkRatio ? 'bg-green-500/80 text-white' : 'bg-red-500/80 text-white'
+        }`}>
+          {formatRatio(asset.aspectRatio)}
+        </div>
+      )}
 
-      {/* Edit button — only for images */}
-      {onEdit && asset.fileType === 'image' && (
+      {/* Edit button — only for images; appears at top-left below the select checkbox */}
+      {onEdit && !isVideo && (
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(); }}
           title="Edit photo"
-          className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/70 border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-violet-600/90 hover:border-violet-400 z-10"
+          className="absolute top-9 left-2 w-7 h-7 rounded-full bg-black/70 border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-violet-600/90 hover:border-violet-400 z-10"
         >
           <Pencil className="w-3.5 h-3.5 text-white" />
         </button>
@@ -295,6 +326,7 @@ function AssetThumbnail({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function GalleryPage() {
+  const router = useRouter();
   const {
     selectedModelId, setModels, setSelectedModelId, setCurrentUser,
     galleryAssets, setGalleryAssets, addGalleryAsset,
@@ -578,6 +610,7 @@ export default function GalleryPage() {
     const selected = galleryAssets.filter((a) => selectedIds.has(a.id));
     setStagedAssets(selected);
     clearSelection();
+    router.push('/schedule');
   };
 
   const toggleApprove = (e: React.MouseEvent, id: string) => {
@@ -589,8 +622,7 @@ export default function GalleryPage() {
     const approved = galleryAssets.filter((a) => approvedIds.has(a.id));
     if (approved.length === 0) return;
     setStagedAssets(approved);
-    // Override workflowStep to skip staging and go straight to scheduling
-    setWorkflowStep('scheduling');
+    router.push('/schedule');
   };
 
   const handleEditVariant = useCallback((assetId: string, ratio: CropRatio) => {
@@ -1006,7 +1038,7 @@ export default function GalleryPage() {
                   <button onClick={clearSelection} className="btn-ghost text-sm p-1.5"><X className="w-4 h-4" /></button>
                   <button onClick={handleStageSelected} className="btn-primary text-sm flex items-center gap-1.5">
                     <Layers className="w-4 h-4" />
-                    Stage {selectedIds.size} Asset{selectedIds.size !== 1 ? 's' : ''} →
+                    Schedule {selectedIds.size} Asset{selectedIds.size !== 1 ? 's' : ''} →
                   </button>
 
                 </div>
@@ -1367,8 +1399,6 @@ export default function GalleryPage() {
         );
       })()}
 
-      {workflowStep === 'scheduling' && <BatchScheduler />}
-
       {/* Direct-from-gallery editor */}
       {galleryEditingAsset && (
         <ImageEditor
@@ -1403,8 +1433,8 @@ export default function GalleryPage() {
                 onClick={() => {
                   approveAsset(postEditVariant.id);
                   setStagedAssets([postEditVariant]);
-                  setWorkflowStep('scheduling');
                   setPostEditVariant(null);
+                  router.push('/schedule');
                 }}
                 className="w-full btn-secondary flex items-center justify-center gap-2 py-3"
               >
