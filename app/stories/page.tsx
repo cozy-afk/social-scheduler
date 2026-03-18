@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { mockModels, mockAdmin, mockPosts, mockCaptions } from '@/lib/mockData';
+import { mockModels, mockAdmin, mockCaptions } from '@/lib/mockData';
 import StoryApprovalQueue from '@/components/StoryApprovalQueue';
 
 export default function StoriesPage() {
@@ -12,7 +12,7 @@ export default function StoriesPage() {
     setModels(mockModels);
     setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
-    setPosts(mockPosts);
+    setPosts([]);
     setCaptions(mockCaptions);
   }, [setModels, setSelectedModelId, setCurrentUser, setPosts, setCaptions]);
 

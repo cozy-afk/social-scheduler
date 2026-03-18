@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useStore } from '@/lib/store';
-import { mockModels, mockAdmin, mockPosts, mockCeliaPosts, mockCeliaGalleryAssets, mockCeliaApprovedAssetIds } from '@/lib/mockData';
+import { mockModels, mockAdmin } from '@/lib/mockData';
+import { getCachedAssets, setCachedAssets, fetchAllGalleryAssets } from '@/lib/gallery-cache';
 import { GalleryAsset, Post, Platform, TimeSlot } from '@/types/models';
 import {
   Film, Heart, MessageCircle, Bookmark, ChevronLeft, ChevronRight,
@@ -635,12 +636,12 @@ interface AssetCarouselGroup {
 }
 
 function ApprovedAssetsPanel({
-  assets, selectedId, onSelect, onDragStart, groups, setGroups, onAutoSchedule,
+  assets, selectedId, onSelect, onDragStart, groups, setGroups, onAutoSchedule, r2Loading,
 }: {
   assets: GalleryAsset[]; selectedId: string | null;
   onSelect: (id: string) => void; onDragStart: (id: string) => void;
   groups: AssetCarouselGroup[]; setGroups: (g: AssetCarouselGroup[]) => void;
-  onAutoSchedule: () => void;
+  onAutoSchedule: () => void; r2Loading?: boolean;
 }) {
   const [panelWidth, setPanelWidth] = useState(248);
   const [linkMode, setLinkMode] = useState(false);
@@ -764,12 +765,21 @@ function ApprovedAssetsPanel({
 
       {assets.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 px-5 py-10 text-center">
-          <CheckCircle2 className="w-8 h-8" style={{ color: 'var(--accent-violet)', opacity: 0.6 }} />
-          <div>
-            <p className="text-xs font-medium text-white mb-1">No approved assets</p>
-            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Approve assets in Gallery first</p>
-          </div>
-          <Link href="/gallery" className="btn-primary text-xs py-1.5 px-3 mt-1">Open Gallery</Link>
+          {r2Loading ? (
+            <>
+              <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs text-zinc-400">Loading assets from vault…</p>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="w-8 h-8" style={{ color: 'var(--accent-violet)', opacity: 0.6 }} />
+              <div>
+                <p className="text-xs font-medium text-white mb-1">No assets found</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Upload assets in Gallery first</p>
+              </div>
+              <Link href="/gallery" className="btn-primary text-xs py-1.5 px-3 mt-1">Open Gallery</Link>
+            </>
+          )}
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-3 no-scrollbar">
@@ -1414,14 +1424,44 @@ export default function SchedulePage() {
 
   useEffect(() => {
     setModels(mockModels);
-    // Default to Celia (id '4') for the test run
     if (!selectedModelId) setSelectedModelId('4');
     setCurrentUser(mockAdmin);
-    setPosts([...mockPosts, ...mockCeliaPosts]);
-    setGalleryAssets(mockCeliaGalleryAssets);
-    setApprovedAssetIds(mockCeliaApprovedAssetIds);
+    setPosts([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ─── Load real R2 assets whenever selected model changes ─────────────────
+  const [r2Loading, setR2Loading] = useState(false);
+  useEffect(() => {
+    const model = mockModels.find((m) => m.id === selectedModelId);
+    if (!model?.s3Folder) return;
+
+    const cached = getCachedAssets(model.id);
+    if (cached) {
+      setGalleryAssets(cached.assets);
+      setApprovedAssetIds(cached.assets.map((a) => a.id));
+      if (cached.status === 'fresh') return;
+    }
+
+    setR2Loading(true);
+    const accumulated: import('@/types/models').GalleryAsset[] = cached?.assets ? [...cached.assets] : [];
+
+    fetchAllGalleryAssets(model.s3Folder, (batch) => {
+      accumulated.push(...batch);
+      setGalleryAssets([...accumulated]);
+      setApprovedAssetIds(accumulated.map((a) => a.id));
+    }, cached?.etag ?? null)
+      .then(({ allAssets, etag }) => {
+        if (allAssets.length > 0) {
+          setCachedAssets(model.id, allAssets, etag);
+          setGalleryAssets(allAssets);
+          setApprovedAssetIds(allAssets.map((a) => a.id));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setR2Loading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModelId]);
 
   const selectedModel = models.find((m) => m.id === selectedModelId);
 
@@ -1694,10 +1734,16 @@ export default function SchedulePage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {r2Loading && (
+            <span className="flex items-center gap-1.5 text-xs text-zinc-400">
+              <div className="w-3.5 h-3.5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+              Loading vault…
+            </span>
+          )}
           {approvedAssets.length > 0 && (
             <span className="text-xs font-semibold px-2 py-1 rounded-lg"
               style={{ background: 'rgba(124,58,237,0.15)', color: 'var(--accent-violet)', border: '1px solid rgba(124,58,237,0.25)' }}>
-              {approvedAssets.length} approved
+              {approvedAssets.length} assets
             </span>
           )}
           <Link href="/gallery" className="btn-secondary text-xs flex items-center gap-1.5">
@@ -1719,6 +1765,7 @@ export default function SchedulePage() {
           groups={panelGroups}
           setGroups={setPanelGroups}
           onAutoSchedule={handleAutoSchedule}
+          r2Loading={r2Loading}
         />
 
         {showPhonePreview ? (

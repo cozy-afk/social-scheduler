@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
-import { mockModels, mockPosts } from '@/lib/mockData';
+import { mockModels } from '@/lib/mockData';
 import { decodeVAToken } from '@/lib/magic-links';
 import VATaskQueue from '@/components/VATaskQueue';
 import { AlertTriangle, Loader2, Zap, ChevronDown } from 'lucide-react';
@@ -120,7 +120,7 @@ export default function VATokenPage() {
     setCurrentUser(va);
     setModels(filtered);
     if (filtered.length > 0) setSelectedModelId(filtered[0].id);
-    setPosts(mockPosts.filter((p) => payload.assignedModels.includes(p.modelId)));
+    setPosts([]);
     setVaName(payload.vaName);
     setStatus('valid');
   }, [token, setCurrentUser, setModels, setSelectedModelId, setPosts]);

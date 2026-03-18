@@ -2,22 +2,21 @@
 
 import { useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { mockModels, mockAdmin, mockPosts, mockCaptions, mockVAUsers } from '@/lib/mockData';
+import { mockModels, mockAdmin, mockCaptions, mockVAUsers } from '@/lib/mockData';
 import CalendarView from '@/components/CalendarView';
 import CreatePostModal from '@/components/CreatePostModal';
 import { AuthGuard } from '@/components/AuthGuard';
 
 export default function AdminPage() {
-  const { setModels, selectedModelId, setSelectedModelId, setCurrentUser, setPosts, setCaptions, setVAUsers, showCreatePostModal } = useStore();
+  const { setModels, selectedModelId, setSelectedModelId, setCurrentUser, setCaptions, setVAUsers, showCreatePostModal } = useStore();
 
   useEffect(() => {
     setModels(mockModels);
     if (!selectedModelId) setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
-    setPosts(mockPosts);
     setCaptions(mockCaptions);
     setVAUsers(mockVAUsers);
-  }, [setModels, setSelectedModelId, setCurrentUser, setPosts, setCaptions, setVAUsers]);
+  }, [setModels, setSelectedModelId, setCurrentUser, setCaptions, setVAUsers]);
 
   return (
     <AuthGuard>

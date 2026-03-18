@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useStore, getVisibleModels } from '@/lib/store';
-import { mockModels, mockAdmin, mockVAUsers, mockPosts, mockCaptions, mockAgency1User } from '@/lib/mockData';
+import { mockModels, mockAdmin, mockVAUsers, mockCaptions, mockAgency1User } from '@/lib/mockData';
 import { Model, User, TimeSlot, Platform, PostType, PostingFrequencyConfig } from '@/types/models';
 import { createVAMagicLink, getVAMagicLinkURL } from '@/lib/magic-links';
 import {
@@ -486,7 +486,7 @@ export default function ModelsPage() {
     setModels(mockModels);
     if (!selectedModelId) setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
-    setPosts(mockPosts);
+    setPosts([]);
     setCaptions(mockCaptions);
     setVAUsers(mockVAUsers);
     setMagicLinks([]);

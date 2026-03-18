@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useStore } from '@/lib/store';
-import { mockModels, mockAdmin, mockVAUsers, mockPosts, mockCaptions } from '@/lib/mockData';
+import { mockModels, mockAdmin, mockVAUsers, mockCaptions } from '@/lib/mockData';
 import { createVAMagicLink, getVAMagicLinkURL } from '@/lib/magic-links';
 import { Model, User, TimeSlot, Platform, PostType, PostingFrequencyConfig, DailyPostingTarget } from '@/types/models';
 import {
@@ -1111,7 +1111,7 @@ export default function SettingsPage() {
     setModels(mockModels);
     setSelectedModelId(mockModels[0].id);
     setCurrentUser(mockAdmin);
-    setPosts(mockPosts);
+    setPosts([]);
     setCaptions(mockCaptions);
     setVAUsers(mockVAUsers);
     setMagicLinks([]);
