@@ -8,6 +8,7 @@ import {
   errorResponse,
   withErrorHandler,
 } from '@/lib/api-utils';
+import { listObjects, getPublicUrl } from '@/lib/r2';
 
 // Story categories and their S3 folder paths
 const STORY_CATEGORIES = {
@@ -99,26 +100,33 @@ function calculateCropPosition(
 }
 
 /**
- * Get random image from S3 folder
- * This is a placeholder - will be replaced with actual S3 implementation
+ * Get random image from R2/S3 folder, falling back to demo placeholder.
  */
 async function getRandomImageFromCategory(category: keyof typeof STORY_CATEGORIES) {
-  // TODO: Replace with actual S3 SDK call
-  // const s3 = new AWS.S3();
-  // const params = {
-  //   Bucket: process.env.AWS_S3_BUCKET,
-  //   Prefix: STORY_CATEGORIES[category]
-  // };
-  // const data = await s3.listObjectsV2(params).promise();
-  // const images = data.Contents.filter(obj => obj.Key.match(/\.(jpg|jpeg|png)$/i));
-  // const randomImage = images[Math.floor(Math.random() * images.length)];
-  // return randomImage.Key;
+  try {
+    const prefix = STORY_CATEGORIES[category];
+    const result = await listObjects(prefix);
+    const images = result.objects.filter((o) =>
+      o.key.match(/\.(jpg|jpeg|png|webp)$/i)
+    );
 
-  // Mock implementation for now
+    if (images.length > 0) {
+      const chosen = images[Math.floor(Math.random() * images.length)];
+      return {
+        key: chosen.key,
+        url: getPublicUrl(chosen.key),
+        width: 1080,
+        height: 1350,
+      };
+    }
+  } catch {
+    // R2 not configured — fall through to mock
+  }
+
   return {
-    key: `${STORY_CATEGORIES[category]}/mock-image-${Date.now()}.jpg`,
+    key: `${STORY_CATEGORIES[category]}/demo-${Date.now()}.jpg`,
     url: '/demo-image.jpg',
-    width: 1920, // Mock dimensions
+    width: 1920,
     height: 1080,
   };
 }

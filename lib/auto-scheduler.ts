@@ -255,15 +255,90 @@ function calculateScheduleSummary(posts: Post[]): AutoScheduleResult['summary'] 
 }
 
 /**
- * Generate captions for auto-scheduled posts
+ * Generate captions for auto-scheduled posts using the AI service or caption library.
+ * Falls back to platform-appropriate defaults when AI is not configured.
  */
 export async function generateCaptionsForScheduledPosts(
   posts: Post[],
-  _captionLibrary: unknown[]
+  captionLibrary: Array<{ platform?: string; text: string }>
 ): Promise<Post[]> {
-  // TODO: Integrate with AI service for caption generation
-  return posts.map(post => ({
-    ...post,
-    description: 'Auto-generated caption (to be implemented)',
+  // Build a lookup of available captions per platform
+  const captionsByPlatform: Record<string, string[]> = {};
+  for (const cap of captionLibrary) {
+    const key = cap.platform ?? 'general';
+    if (!captionsByPlatform[key]) captionsByPlatform[key] = [];
+    captionsByPlatform[key].push(cap.text);
+  }
+
+  const generalCaptions = captionsByPlatform['general'] ?? [];
+
+  const PLATFORM_DEFAULTS: Record<Platform, string[]> = {
+    instagram: [
+      '✨ living for moments like these',
+      '🔥 new content just dropped',
+      '💎 the vibe is immaculate',
+    ],
+    tiktok: [
+      'wait for it 👀 #foryou',
+      'POV: the day is going well 💅',
+      'this one hits different 🎵',
+    ],
+    threads: [
+      "it's giving main character energy",
+      'daily reminder: you deserve good things',
+      'vibes only today ✌️',
+    ],
+    x: [
+      'new drop 🔥',
+      'just posted something special 👀',
+      'check the link 💎',
+    ],
+    fanvue: [
+      'exclusive content just for you 💝',
+      'something special dropping today ✨',
+    ],
+  };
+
+  // Try to use AI service if configured
+  let aiService: ReturnType<typeof createAIService> | null = null;
+  try {
+    aiService = createAIService();
+  } catch {
+    // AI not configured — fall through to library/defaults
+  }
+
+  return Promise.all(posts.map(async (post) => {
+    // If post already has a description, keep it
+    if (post.description?.trim()) return post;
+
+    // Try AI generation
+    if (aiService) {
+      try {
+        const captions = await aiService.generateCaptions({
+          platform: post.platform,
+          postType: post.postType,
+          exampleCaptions: generalCaptions.slice(0, 3),
+          maxLength: 150,
+          style: 'casual',
+        });
+        if (captions[0]?.trim()) {
+          return { ...post, description: captions[0].trim() };
+        }
+      } catch {
+        // Fall through to library
+      }
+    }
+
+    // Use caption library
+    const platformCaps = captionsByPlatform[post.platform] ?? generalCaptions;
+    if (platformCaps.length > 0) {
+      const cap = platformCaps[Math.floor(Math.random() * platformCaps.length)];
+      return { ...post, description: cap };
+    }
+
+    // Fall back to hardcoded defaults
+    const defaults = PLATFORM_DEFAULTS[post.platform] ?? PLATFORM_DEFAULTS.instagram;
+    const caption = defaults[Math.floor(Math.random() * defaults.length)];
+    return { ...post, description: caption };
   }));
 }
