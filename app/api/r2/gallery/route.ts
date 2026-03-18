@@ -129,8 +129,6 @@ export async function GET(req: NextRequest) {
           ? await getPresignedUrl(obj.key, 3600)
           : getPublicUrl(obj.key);
 
-        const thumbUrl = `/api/r2/thumb?key=${encodeURIComponent(obj.key)}`;
-
         return {
           // Scope id to model folder so assets from different models never share
           // the same React key — prevents VideoThumbnail state leaking between models
@@ -142,7 +140,10 @@ export async function GET(req: NextRequest) {
           uploadedAt: obj.lastModified.toISOString(),
           source: 's3' as const,
           s3Key: obj.key,
-          thumbnailUrl: fileType === 'image' ? thumbUrl : undefined,
+          // Use the presigned URL directly as thumbnailUrl — browser fetches straight
+          // from R2/Cloudflare edge with no server hop. The old /api/r2/thumb proxy
+          // streamed the full file through the server (no resizing), which was slower.
+          thumbnailUrl: fileType === 'image' ? fileUrl : undefined,
         };
       })
     );

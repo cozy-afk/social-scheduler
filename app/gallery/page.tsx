@@ -62,28 +62,38 @@ function VideoThumbnail({ src, fileName }: { src: string; fileName: string }) {
   const [shouldLoad, setShouldLoad] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) { setShouldLoad(true); observer.disconnect(); } },
-      { rootMargin: '300px' } // start loading 300px before visible
+      { rootMargin: '300px' }
     );
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
 
+  // Seek to first real frame once metadata is ready — downloads only the
+  // video header (~100-500 KB) instead of waiting for full playback buffer.
+  const handleMetadata = () => {
+    const v = videoRef.current;
+    if (v) v.currentTime = 0.1;
+  };
+
   return (
     <div ref={containerRef} className="w-full h-full relative bg-slate-800">
       {shouldLoad && (
         <video
+          ref={videoRef}
           src={src}
           className={`w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
           preload="metadata"
           muted
           playsInline
-          onLoadedData={() => setLoaded(true)}
+          onLoadedMetadata={handleMetadata}
+          onSeeked={() => setLoaded(true)}
         />
       )}
       {!loaded && (
