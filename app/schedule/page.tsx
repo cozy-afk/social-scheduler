@@ -628,6 +628,45 @@ function XProfilePage({ modelName, posts }: { modelName: string; posts: Post[] }
   );
 }
 
+// ─── PanelVideoThumb ─────────────────────────────────────────────────────────
+
+function PanelVideoThumb({ src, fileName }: { src: string; fileName: string }) {
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setShouldLoad(true); obs.disconnect(); } },
+      { rootMargin: '200px' }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="w-full h-full relative bg-zinc-900">
+      {shouldLoad && (
+        <video
+          src={src}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          preload="metadata"
+          muted
+          playsInline
+          onLoadedMetadata={() => setLoaded(true)}
+        />
+      )}
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Play className="w-4 h-4 text-zinc-500" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Left Panel: Approved Assets ─────────────────────────────────────────────
 
 interface AssetCarouselGroup {
@@ -706,7 +745,7 @@ function ApprovedAssetsPanel({
       <div className="px-3 py-3 flex items-center justify-between flex-shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div>
-          <p className="text-sm font-bold text-white">Approved</p>
+          <p className="text-sm font-bold text-white">Assets</p>
           <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
             {assets.length} assets · {groups.length} carousel{groups.length !== 1 ? 's' : ''}
           </p>
@@ -800,7 +839,10 @@ function ApprovedAssetsPanel({
                   <div className="grid grid-cols-2 h-full gap-px bg-black">
                     {groupAssets.slice(0, 4).map((a, i) => (
                       <div key={a.id} className="relative overflow-hidden">
-                        <img src={a.fileUrl} className="w-full h-full object-cover" alt="" draggable={false} />
+                        {a.fileType === 'video'
+                          ? <PanelVideoThumb src={a.fileUrl} fileName={a.fileName} />
+                          : <img src={a.fileUrl} className="w-full h-full object-cover" alt="" draggable={false} />
+                        }
                         {i === 3 && groupAssets.length > 4 && (
                           <div className="absolute inset-0 flex items-center justify-center"
                             style={{ background: 'rgba(0,0,0,0.65)' }}>
@@ -853,15 +895,12 @@ function ApprovedAssetsPanel({
                     boxShadow: isSelected ? '0 0 12px rgba(251,191,36,0.3)' :
                       selectedId === asset.id ? '0 0 12px rgba(124,58,237,0.3)' : 'none',
                   }}>
-                  <img src={asset.fileUrl} alt={asset.fileName}
-                    className="w-full h-full object-cover" draggable={false} />
+                  {asset.fileType === 'video'
+                    ? <PanelVideoThumb src={asset.fileUrl} fileName={asset.fileName} />
+                    : <img src={asset.fileUrl} alt={asset.fileName} className="w-full h-full object-cover" draggable={false} />
+                  }
                   <div className="absolute inset-0"
                     style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)' }} />
-                  {asset.fileType === 'video' && (
-                    <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center">
-                      <Play className="w-2.5 h-2.5 text-white fill-white" />
-                    </div>
-                  )}
                   {/* Link mode checkbox */}
                   {linkMode && (
                     <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
@@ -1432,6 +1471,10 @@ export default function SchedulePage() {
 
   // ─── Load real R2 assets whenever selected model changes ─────────────────
   const [r2Loading, setR2Loading] = useState(false);
+  // Use a ref to read approvedAssetIds without adding it as a dependency
+  const approvedIdsRef = useRef(approvedAssetIds);
+  approvedIdsRef.current = approvedAssetIds;
+
   useEffect(() => {
     const model = mockModels.find((m) => m.id === selectedModelId);
     if (!model?.s3Folder) return;
@@ -1439,7 +1482,9 @@ export default function SchedulePage() {
     const cached = getCachedAssets(model.id);
     if (cached) {
       setGalleryAssets(cached.assets);
-      setApprovedAssetIds(cached.assets.map((a) => a.id));
+      if (approvedIdsRef.current.length === 0) {
+        setApprovedAssetIds(cached.assets.map((a) => a.id));
+      }
       if (cached.status === 'fresh') return;
     }
 
@@ -1449,13 +1494,17 @@ export default function SchedulePage() {
     fetchAllGalleryAssets(model.s3Folder, (batch) => {
       accumulated.push(...batch);
       setGalleryAssets([...accumulated]);
-      setApprovedAssetIds(accumulated.map((a) => a.id));
+      if (approvedIdsRef.current.length === 0) {
+        setApprovedAssetIds(accumulated.map((a) => a.id));
+      }
     }, cached?.etag ?? null)
       .then(({ allAssets, etag }) => {
         if (allAssets.length > 0) {
           setCachedAssets(model.id, allAssets, etag);
           setGalleryAssets(allAssets);
-          setApprovedAssetIds(allAssets.map((a) => a.id));
+          if (approvedIdsRef.current.length === 0) {
+            setApprovedAssetIds(allAssets.map((a) => a.id));
+          }
         }
       })
       .catch(() => {})
@@ -1499,6 +1548,9 @@ export default function SchedulePage() {
       })
       .catch(() => {});
   }, [selectedModel]);
+
+  // ─── Panel asset selection ────────────────────────────────────────────────
+  const [selectedPanelAssetId, setSelectedPanelAssetId] = useState<string | null>(null);
 
   // ─── Auto-schedule state + carousel groups (lifted from panel) ────────────
   const [panelGroups, setPanelGroups] = useState<AssetCarouselGroup[]>([]);
@@ -1759,8 +1811,8 @@ export default function SchedulePage() {
         {/* LEFT: Approved assets panel */}
         <ApprovedAssetsPanel
           assets={approvedAssets}
-          selectedId={null}
-          onSelect={() => {}}
+          selectedId={selectedPanelAssetId}
+          onSelect={(id) => setSelectedPanelAssetId((prev) => prev === id ? null : id)}
           onDragStart={(id) => { handleDragStart(id); setDraggingAssetId(id); }}
           groups={panelGroups}
           setGroups={setPanelGroups}
@@ -1777,11 +1829,11 @@ export default function SchedulePage() {
               <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
                 <button
                   onClick={() => setShowPhonePreview(false)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all"
-                  style={{ background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.4)', color: '#a78bfa' }}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition-all"
+                  style={{ background: 'rgba(124,58,237,0.25)', border: '1px solid rgba(124,58,237,0.6)', color: '#c4b5fd' }}
                 >
-                  <Layers className="w-3.5 h-3.5" />
-                  Strategy view
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Back to Planner
                 </button>
                 <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>|</span>
                 {PREVIEW_PLATFORMS.map((p) => {
@@ -1858,9 +1910,19 @@ export default function SchedulePage() {
                 />
                 {selectedCalDate && (
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
-                      {format(selectedCalDate, 'MMM d')} · {selectedDayPosts.length} post{selectedDayPosts.length !== 1 ? 's' : ''}
-                    </p>
+                    <div className="flex items-center mb-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                        {format(selectedCalDate, 'MMM d')} · {selectedDayPosts.length} post{selectedDayPosts.length !== 1 ? 's' : ''}
+                      </p>
+                      {selectedDayPosts.length > 0 && (
+                        <button
+                          onClick={() => setPosts(posts.filter((p) => !isSameDay(parseISO(p.scheduledTime), selectedCalDate!)))}
+                          className="text-[9px] text-zinc-600 hover:text-red-400 transition-colors ml-auto"
+                        >
+                          Clear day
+                        </button>
+                      )}
+                    </div>
                     {selectedDayPosts.length === 0 ? (
                       <p className="text-[11px] text-zinc-600">No posts scheduled</p>
                     ) : (
@@ -1884,6 +1946,13 @@ export default function SchedulePage() {
                                 {REEL_TYPES.has(p.postType) ? 'Reel' : STORY_TYPES.has(p.postType) ? 'Story' : 'Post'}
                               </p>
                             </div>
+                            <button
+                              onClick={() => setPosts(posts.filter((x) => x.id !== p.id))}
+                              className="w-5 h-5 flex items-center justify-center rounded text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                              title="Remove post"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -2012,10 +2081,20 @@ export default function SchedulePage() {
                     {selectedCalDate && selectedDayPosts.length > 0 && (
                       <div className="mt-3 pt-3 space-y-1.5"
                         style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                        <p className="text-[9px] font-semibold uppercase tracking-wider mb-2"
-                          style={{ color: 'var(--text-muted)' }}>
-                          {format(selectedCalDate, 'MMM d')} · {selectedDayPosts.length} post{selectedDayPosts.length !== 1 ? 's' : ''}
-                        </p>
+                        <div className="flex items-center mb-2">
+                          <p className="text-[9px] font-semibold uppercase tracking-wider"
+                            style={{ color: 'var(--text-muted)' }}>
+                            {format(selectedCalDate, 'MMM d')} · {selectedDayPosts.length} post{selectedDayPosts.length !== 1 ? 's' : ''}
+                          </p>
+                          {selectedDayPosts.length > 0 && (
+                            <button
+                              onClick={() => setPosts(posts.filter((p) => !isSameDay(parseISO(p.scheduledTime), selectedCalDate!)))}
+                              className="text-[9px] text-zinc-600 hover:text-red-400 transition-colors ml-auto"
+                            >
+                              Clear day
+                            </button>
+                          )}
+                        </div>
                         {selectedDayPosts.slice(0, 4).map((p) => (
                           <div key={p.id} className="flex items-center gap-2 px-2 py-1 rounded-lg"
                             style={{ background: 'rgba(255,255,255,0.04)' }}>
@@ -2028,6 +2107,13 @@ export default function SchedulePage() {
                               {format(parseISO(p.scheduledTime), 'h:mm a')} ·{' '}
                               {REEL_TYPES.has(p.postType) ? 'Reel' : STORY_TYPES.has(p.postType) ? 'Story' : 'Post'}
                             </p>
+                            <button
+                              onClick={() => setPosts(posts.filter((x) => x.id !== p.id))}
+                              className="w-4 h-4 flex items-center justify-center rounded text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                              title="Remove post"
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </button>
                           </div>
                         ))}
                       </div>
