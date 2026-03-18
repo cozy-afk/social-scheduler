@@ -181,7 +181,7 @@ function AssetThumbnail({
           // only fetching metadata (first frame) once the cell is near the viewport.
           <VideoThumbnail src={asset.fileUrl} fileName={asset.fileName} />
         ) : asset.fileUrl ? (
-          <img src={asset.fileUrl} alt={asset.fileName} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+          <img src={asset.fileUrl} alt={asset.fileName} loading="lazy" decoding="async" draggable={false} className="w-full h-full object-cover" />
         ) : (
           <ImageIcon className="w-8 h-8 text-slate-600" />
         )}
@@ -539,13 +539,13 @@ export default function GalleryPage() {
     uploadFilesToR2(files);
   }, [selectedModel, uploadFilesToR2, setR2Error]);
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }, []);
 
   const selectAll = () => setSelectedIds(new Set(filtered.map((a) => a.id)));
   const clearSelection = () => setSelectedIds(new Set());
@@ -724,11 +724,18 @@ export default function GalleryPage() {
     }
   }, [showVirality, galleryAssets, analyzeAllVirality]);
 
+  // Reset to page 1 when filters change — kept in useEffect to avoid side effects inside useMemo
+  useEffect(() => {
+    setPage(1);
+  }, [galleryAssets, assetFilter, search]);
+
   const filtered = useMemo(() => {
-    setPage(1); // reset to first page whenever the filter set changes
     return galleryAssets.filter((a) => {
-      if (assetFilter === 'image' && a.fileType !== 'image') return false;
-      if (assetFilter === 'video' && a.fileType !== 'video') return false;
+      // Normalise fileType so both 'image' and 'image/jpeg' style values work
+      const isImage = a.fileType === 'image' || a.fileType?.startsWith('image/');
+      const isVideo = a.fileType === 'video' || a.fileType?.startsWith('video/');
+      if (assetFilter === 'image' && !isImage) return false;
+      if (assetFilter === 'video' && !isVideo) return false;
       if (search) {
         const term = search.toLowerCase();
         const dateStr = a.uploadedAt
@@ -736,7 +743,7 @@ export default function GalleryPage() {
           : '';
         const matches =
           a.fileName.toLowerCase().includes(term) ||
-          a.fileType.toLowerCase().includes(term) ||
+          a.fileType?.toLowerCase().includes(term) ||
           formatRatio(a.aspectRatio).toLowerCase().includes(term) ||
           dateStr.includes(term);
         if (!matches) return false;
@@ -1104,7 +1111,7 @@ export default function GalleryPage() {
                                   <Film className="w-5 h-5 text-slate-500" />
                                 )
                               ) : asset.fileUrl ? (
-                                <img src={asset.fileUrl} alt={asset.fileName} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                                <img src={asset.fileUrl} alt={asset.fileName} loading="lazy" decoding="async" draggable={false} className="w-full h-full object-cover" />
                               ) : (
                                 <ImageIcon className="w-5 h-5 text-slate-500" />
                               )}

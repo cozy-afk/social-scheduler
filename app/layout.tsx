@@ -9,6 +9,12 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'CreatorFlow',
   description: 'Multi-platform social media scheduling for creators',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'CreatorFlow',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

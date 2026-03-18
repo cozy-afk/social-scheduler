@@ -317,7 +317,7 @@ function TaskCard({ post, onComplete }: TaskCardProps) {
           {post.assets.length === 1 ? (
             <button
               onClick={() => handleDownloadSingle(0)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-95"
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-95"
               style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}
             >
               <Download className="w-4 h-4" />
@@ -341,7 +341,7 @@ function TaskCard({ post, onComplete }: TaskCardProps) {
               <button
                 onClick={handleDownloadAll}
                 className={clsx(
-                  'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95',
+                  'w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all active:scale-95',
                   downloadedAll ? 'text-green-400' : 'text-white'
                 )}
                 style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}
