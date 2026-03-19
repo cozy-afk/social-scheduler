@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Calendar, Film, Zap, X, Check, Pencil, Image, BookOpen, FileText,
-  Layers, Link2, Unlink2,
+  Layers, Link2, Unlink2, ArrowLeft,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { GalleryAsset, PostType, Platform, TimeSlot } from '@/types/models';
@@ -308,7 +308,7 @@ function SlotCard({
 
 export default function BatchScheduler() {
   const router = useRouter();
-  const { galleryAssets, stagedAssets, setWorkflowStep, addPost, selectedModelId, models } = useStore();
+  const { galleryAssets, stagedAssets, setWorkflowStep, clearStaging, addPost, selectedModelId, models } = useStore();
   const selectedModel = models.find((m) => m.id === selectedModelId);
 
   // Initialize selected assets from stagedAssets (pre-populated from gallery page)
@@ -644,8 +644,8 @@ export default function BatchScheduler() {
         updatedAt: new Date().toISOString(),
       });
     }
-    setWorkflowStep('gallery');
-    router.push('/gallery');
+    clearStaging();
+    router.push('/schedule');
   }, [slotAssignments, slots, assets, galleryAssets, assetGroups, addPost, selectedModelId, setWorkflowStep, router, editResults]);
 
   // Group slots by date
@@ -688,6 +688,14 @@ export default function BatchScheduler() {
         <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b"
           style={{ background: 'var(--bg-sidebar)', borderColor: 'rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => { clearStaging(); }}
+              className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </button>
+            <div className="w-px h-5 bg-white/10" />
             <div>
               <h1 className="page-title">Schedule Assets</h1>
               <div className="flex items-center gap-1 mt-0.5">
@@ -744,8 +752,8 @@ export default function BatchScheduler() {
             style={{ width: panelWidth, borderColor: 'rgba(255,255,255,0.06)', background: 'var(--bg-sidebar)' }}
           >
             <div className="flex items-center justify-between">
-              <p className="section-title">Gallery ({galleryAssets.length})</p>
-              <span className="text-[10px] text-violet-300">{assets.length} selected</span>
+              <p className="section-title">Selected ({assets.length})</p>
+              <span className="text-[10px] text-violet-300">{assets.length} ready</span>
             </div>
 
             {groupingMode && (
@@ -754,10 +762,14 @@ export default function BatchScheduler() {
               </div>
             )}
 
-            {galleryAssets.length === 0 ? (
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No assets in gallery</p>
-            ) : (
-              galleryAssets.map((asset) => (
+            {(() => {
+              const schedulingAssets = galleryAssets.filter(
+                (a) => selectedAssetIds.has(a.id) || (a.variantOf && selectedAssetIds.has(a.variantOf))
+              );
+              return schedulingAssets.length === 0 ? (
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No assets selected</p>
+              ) : (
+                schedulingAssets.map((asset) => (
                 <AssetCard
                   key={asset.id}
                   asset={asset}
@@ -780,7 +792,8 @@ export default function BatchScheduler() {
                   onDragStart={() => setDragItem(asset.id)}
                 />
               ))
-            )}
+              );
+            })()}
 
             {/* Carousel groups */}
             {assetGroups.length > 0 && (

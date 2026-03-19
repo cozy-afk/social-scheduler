@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+
 import { useStore, getVisibleModels } from '@/lib/store';
 import { mockModels, mockAdmin, mockPostReferences } from '@/lib/mockData';
 import { AuthGuard } from '@/components/AuthGuard';
 import CreatePostModal from '@/components/CreatePostModal';
-import StagingView from '@/components/StagingView';
 import ImageEditor, { EditableImage, ImageEditorResult } from '@/components/ImageEditor';
 import BatchScheduler from '@/components/BatchScheduler';
 import AutoPublisher from '@/components/AutoPublisher';
@@ -21,8 +20,9 @@ import {
   Send, Play, Music2, Layers,
   Grid3X3, List, Rows3, CheckCheck, ThumbsUp, CalendarCheck,
   Share2, ChevronRight, Plus, Wifi, Signal, Battery,
-  Sparkles, Copy, Zap, Star, Pencil, CalendarPlus,
+  Sparkles, Copy, Zap, Star, Pencil, CalendarPlus, Wand2,
 } from 'lucide-react';
+import VariationCreator from '@/components/VariationCreator';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -155,8 +155,10 @@ function AssetThumbnail({
   onApprove,
   onPreviewVideo,
   onEdit,
+  onCreateVariations,
   showVirality,
   viralityAnalysis,
+  variantCount,
 }: {
   asset: GalleryAsset;
   selected: boolean;
@@ -166,8 +168,10 @@ function AssetThumbnail({
   onApprove: (e: React.MouseEvent) => void;
   onPreviewVideo: (e: React.MouseEvent) => void;
   onEdit?: () => void;
+  onCreateVariations?: () => void;
   showVirality: boolean;
   viralityAnalysis?: ViralityAnalysis;
+  variantCount?: number;
 }) {
   const isVideo = asset.fileType === 'video';
   const isOkRatio = asset.aspectRatio
@@ -325,6 +329,25 @@ function AssetThumbnail({
         </button>
       )}
 
+      {/* Create Variations button — base assets only */}
+      {onCreateVariations && !asset.variantOf && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onCreateVariations(); }}
+          title="Create caption variations"
+          className="absolute top-[4.5rem] left-2 w-7 h-7 rounded-full bg-black/70 border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-fuchsia-600/90 hover:border-fuchsia-400 z-10"
+        >
+          <Wand2 className="w-3.5 h-3.5 text-white" />
+        </button>
+      )}
+
+      {/* Variant count badge — shown on base assets that have variations */}
+      {!asset.variantOf && variantCount !== undefined && variantCount > 0 && (
+        <div className="absolute bottom-2 left-2 flex items-center gap-0.5 bg-fuchsia-600/90 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold pointer-events-none">
+          <Copy className="w-2.5 h-2.5" />
+          {variantCount}
+        </div>
+      )}
+
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent px-2 py-2 translate-y-full group-hover:translate-y-0 transition-transform">
         <p className="text-[10px] text-slate-200 truncate">{asset.fileName}</p>
         {asset.sizeBytes && <p className="text-[9px] text-slate-400">{formatBytes(asset.sizeBytes)}</p>}
@@ -336,13 +359,14 @@ function AssetThumbnail({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function GalleryPage() {
-  const router = useRouter();
+
   const {
     selectedModelId, setModels, setSelectedModelId, setCurrentUser,
     galleryAssets, setGalleryAssets, addGalleryAsset,
     setShowCreatePostModal, setPreloadedGalleryAssets, showCreatePostModal,
     setStagedAssets, workflowStep, editingTarget, setEditingTarget,
     updateStagedVariant, setWorkflowStep, stagedAssets, posts, setPostReferences,
+    setApprovedAssetIds,
   } = useStore();
   const models = useStore(getVisibleModels); // Filtered by user role/agency
 
@@ -359,10 +383,25 @@ export default function GalleryPage() {
     return set;
   }, [posts]);
 
+  // Count how many variants each base asset has
+  const variantCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of galleryAssets) {
+      if (a.variantOf) {
+        map.set(a.variantOf, (map.get(a.variantOf) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [galleryAssets]);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { approvedAssetIds, approveAsset, unapproveAsset, clearApprovals } = useStore();
   const approvedIds = new Set(approvedAssetIds);
+  const [sectionFilter, setSectionFilter] = useState<'base' | 'variations'>('base');
+  const [variationCreatorAsset, setVariationCreatorAsset] = useState<GalleryAsset | null>(null);
   const [assetFilter, setAssetFilter] = useState<'all' | 'image' | 'video'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'fresh' | 'used'>('all');
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [pageSize, setPageSize] = useState<20 | 50 | 100>(50);
   const [page, setPage] = useState(1);
@@ -618,9 +657,9 @@ export default function GalleryPage() {
 
   const handleStageSelected = () => {
     const selected = galleryAssets.filter((a) => selectedIds.has(a.id));
-    setStagedAssets(selected);
+    setApprovedAssetIds(selected.map((a) => a.id));
+    setStagedAssets(selected); // sets workflowStep → 'scheduling', BatchScheduler renders as overlay
     clearSelection();
-    router.push('/schedule');
   };
 
   const toggleApprove = (e: React.MouseEvent, id: string) => {
@@ -631,8 +670,8 @@ export default function GalleryPage() {
   const handleScheduleApproved = () => {
     const approved = galleryAssets.filter((a) => approvedIds.has(a.id));
     if (approved.length === 0) return;
-    setStagedAssets(approved);
-    router.push('/schedule');
+    setApprovedAssetIds(approved.map((a) => a.id)); // keep approved IDs alive for schedule page
+    setStagedAssets(approved); // opens BatchScheduler overlay
   };
 
   const handleEditVariant = useCallback((assetId: string, ratio: CropRatio) => {
@@ -793,10 +832,18 @@ export default function GalleryPage() {
   // Reset to page 1 when filters change — kept in useEffect to avoid side effects inside useMemo
   useEffect(() => {
     setPage(1);
-  }, [galleryAssets, assetFilter, search]);
+  }, [galleryAssets, sectionFilter, assetFilter, statusFilter, search]);
 
   const filtered = useMemo(() => {
     return galleryAssets.filter((a) => {
+      // Section filter: base vs variations
+      if (sectionFilter === 'base' && a.variantOf) return false;
+      if (sectionFilter === 'variations' && !a.variantOf) return false;
+
+      // Status filter: fresh = never posted, used = already posted
+      if (statusFilter === 'fresh' && postedUrlSet.has(a.fileUrl)) return false;
+      if (statusFilter === 'used' && !postedUrlSet.has(a.fileUrl)) return false;
+
       // Normalise fileType so both 'image' and 'image/jpeg' style values work
       const isImage = a.fileType === 'image' || a.fileType?.startsWith('image/');
       const isVideo = a.fileType === 'video' || a.fileType?.startsWith('video/');
@@ -816,7 +863,7 @@ export default function GalleryPage() {
       }
       return true;
     });
-  }, [galleryAssets, assetFilter, search]);
+  }, [galleryAssets, sectionFilter, assetFilter, statusFilter, search, postedUrlSet]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = useMemo(
@@ -1017,6 +1064,66 @@ export default function GalleryPage() {
               ))}
             </div>
 
+            {/* Section tabs: Base Assets / Variations */}
+            <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-xl p-1 self-start">
+              <button
+                onClick={() => setSectionFilter('base')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  sectionFilter === 'base'
+                    ? 'bg-violet-600 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <ImageIcon className="w-4 h-4" />
+                Base Assets
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                  sectionFilter === 'base' ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-400'
+                }`}>
+                  {galleryAssets.filter((a) => !a.variantOf).length}
+                </span>
+              </button>
+              <button
+                onClick={() => setSectionFilter('variations')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  sectionFilter === 'variations'
+                    ? 'bg-fuchsia-600 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Wand2 className="w-4 h-4" />
+                Variations
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                  sectionFilter === 'variations' ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-400'
+                }`}>
+                  {galleryAssets.filter((a) => !!a.variantOf).length}
+                </span>
+              </button>
+            </div>
+
+            {/* Status filter: All / Fresh / Used */}
+            {sectionFilter === 'base' && (
+              <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-xl p-1 self-start">
+                {([
+                  { id: 'all', label: 'All', count: galleryAssets.filter(a => !a.variantOf).length },
+                  { id: 'fresh', label: 'Fresh', count: galleryAssets.filter(a => !a.variantOf && !postedUrlSet.has(a.fileUrl)).length },
+                  { id: 'used', label: 'Used', count: galleryAssets.filter(a => !a.variantOf && postedUrlSet.has(a.fileUrl)).length },
+                ] as const).map(({ id, label, count }) => (
+                  <button
+                    key={id}
+                    onClick={() => setStatusFilter(id)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      statusFilter === id ? 'bg-violet-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {label}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                      statusFilter === id ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-400'
+                    }`}>{count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Filters + search + selection bar */}
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
@@ -1097,28 +1204,66 @@ export default function GalleryPage() {
                 <p className="text-slate-600 text-sm mt-1">Drag &amp; drop files here or click Upload to add assets</p>
               </div>
             ) : viewMode === 'grid' ? (
-              <div className={`grid gap-3 ${
-                thumbSize === 2 ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3' :
-                thumbSize === 3 ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4' :
-                thumbSize === 4 ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5' :
-                thumbSize === 5 ? 'grid-cols-3 sm:grid-cols-5 md:grid-cols-6' :
-                                  'grid-cols-4 sm:grid-cols-6 md:grid-cols-8'
-              }`}>
-                {paginated.map((asset) => (
-                  <AssetThumbnail
-                    key={asset.id}
-                    asset={asset}
-                    selected={selectedIds.has(asset.id)}
-                    approved={approvedIds.has(asset.id)}
-                    isPosted={postedUrlSet.has(asset.fileUrl)}
-                    onToggle={() => toggleSelect(asset.id)}
-                    onApprove={(e) => toggleApprove(e, asset.id)}
-                    onPreviewVideo={(e) => { e.stopPropagation(); setPreviewVideo(asset); }}
-                    onEdit={() => setGalleryEditingAsset(asset)}
-                    showVirality={showVirality}
-                    viralityAnalysis={viralityCache.get(asset.id)}
-                  />
-                ))}
+              <div className="space-y-6">
+                {(() => {
+                  const gridCols = thumbSize === 2 ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3' :
+                    thumbSize === 3 ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4' :
+                    thumbSize === 4 ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5' :
+                    thumbSize === 5 ? 'grid-cols-3 sm:grid-cols-5 md:grid-cols-6' :
+                                      'grid-cols-4 sm:grid-cols-6 md:grid-cols-8';
+
+                  // Group paginated assets by upload month
+                  const groups = new Map<string, typeof paginated>();
+                  paginated.forEach((asset) => {
+                    const key = asset.uploadedAt
+                      ? new Date(asset.uploadedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+                      : 'Unknown date';
+                    if (!groups.has(key)) groups.set(key, []);
+                    groups.get(key)!.push(asset);
+                  });
+
+                  return Array.from(groups.entries()).map(([month, monthAssets]) => {
+                    const isCollapsed = collapsedMonths.has(month);
+                    return (
+                      <div key={month}>
+                        <button
+                          onClick={() => setCollapsedMonths(prev => {
+                            const next = new Set(prev);
+                            if (next.has(month)) next.delete(month); else next.add(month);
+                            return next;
+                          })}
+                          className="flex items-center gap-2 mb-3 group w-full text-left"
+                        >
+                          <ChevronRight className={`w-4 h-4 text-slate-500 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+                          <span className="text-sm font-semibold text-slate-300">{month}</span>
+                          <span className="text-xs text-slate-500">{monthAssets.length} asset{monthAssets.length !== 1 ? 's' : ''}</span>
+                          <div className="flex-1 h-px bg-slate-800 ml-1" />
+                        </button>
+                        {!isCollapsed && (
+                          <div className={`grid gap-3 ${gridCols}`}>
+                            {monthAssets.map((asset) => (
+                              <AssetThumbnail
+                                key={asset.id}
+                                asset={asset}
+                                selected={selectedIds.has(asset.id)}
+                                approved={approvedIds.has(asset.id)}
+                                isPosted={postedUrlSet.has(asset.fileUrl)}
+                                onToggle={() => toggleSelect(asset.id)}
+                                onApprove={(e) => toggleApprove(e, asset.id)}
+                                onPreviewVideo={(e) => { e.stopPropagation(); setPreviewVideo(asset); }}
+                                onEdit={!asset.variantOf ? () => setGalleryEditingAsset(asset) : undefined}
+                                onCreateVariations={!asset.variantOf ? () => setVariationCreatorAsset(asset) : undefined}
+                                showVirality={showVirality}
+                                viralityAnalysis={viralityCache.get(asset.id)}
+                                variantCount={variantCountMap.get(asset.id)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             ) : (
               <div className="card overflow-hidden">
@@ -1386,13 +1531,23 @@ export default function GalleryPage() {
       {showCreatePostModal && <CreatePostModal />}
 
       {/* ── Workflow overlays ── */}
-      {workflowStep === 'staging' && <StagingView />}
+      {workflowStep === 'scheduling' && (
+        <div className="fixed inset-0 z-[60]" style={{ background: 'var(--bg-app)' }}>
+          <BatchScheduler />
+        </div>
+      )}
 
       {workflowStep === 'editing' && editingTarget && (() => {
         const sa = stagedAssets.find((s) => s.asset.id === editingTarget.assetId);
         if (!sa) return null;
-        // Use editResult if available, otherwise use original asset
-        const url = sa.editResult?.url || sa.asset.fileUrl;
+        // Use editResult url if available (already a data URL, no CORS), otherwise proxy
+        const rawUrl = sa.editResult?.url || sa.asset.fileUrl;
+        const isDataUrl = rawUrl.startsWith('data:');
+        const url = isDataUrl
+          ? rawUrl
+          : sa.asset.s3Key
+          ? `/api/r2/proxy?key=${encodeURIComponent(sa.asset.s3Key)}`
+          : rawUrl;
         const item: EditableImage = {
           id: sa.asset.id,
           url,
@@ -1414,7 +1569,10 @@ export default function GalleryPage() {
         <ImageEditor
           item={{
             id: galleryEditingAsset.id,
-            url: galleryEditingAsset.fileUrl,
+            // Use same-origin proxy so canvas can fetch without CORS issues
+            url: galleryEditingAsset.s3Key
+              ? `/api/r2/proxy?key=${encodeURIComponent(galleryEditingAsset.s3Key)}`
+              : galleryEditingAsset.fileUrl,
             name: galleryEditingAsset.fileName,
             type: galleryEditingAsset.fileType,
           }}
@@ -1441,10 +1599,9 @@ export default function GalleryPage() {
               </button>
               <button
                 onClick={() => {
-                  approveAsset(postEditVariant.id);
-                  setStagedAssets([postEditVariant]);
+                  setApprovedAssetIds([postEditVariant.id]);
+                  setStagedAssets([postEditVariant]); // opens BatchScheduler overlay
                   setPostEditVariant(null);
-                  router.push('/schedule');
                 }}
                 className="w-full btn-secondary flex items-center justify-center gap-2 py-3"
               >
@@ -1465,6 +1622,21 @@ export default function GalleryPage() {
       {/* Video lightbox */}
       {previewVideo && (
         <VideoLightbox asset={previewVideo} onClose={() => setPreviewVideo(null)} />
+      )}
+
+      {/* Variation Creator */}
+      {variationCreatorAsset && selectedModel?.s3Folder && (
+        <VariationCreator
+          asset={variationCreatorAsset}
+          modelFolder={selectedModel.s3Folder}
+          onClose={() => setVariationCreatorAsset(null)}
+          onSaved={(variants) => {
+            variants.forEach((v) => addGalleryAsset(v));
+            setVariationCreatorAsset(null);
+            // Switch to variations tab so user sees the newly created variants
+            setSectionFilter('variations');
+          }}
+        />
       )}
       </div>{/* end drag-and-drop wrapper */}
     </AuthGuard>

@@ -1465,15 +1465,11 @@ export default function SchedulePage() {
     setModels(mockModels);
     if (!selectedModelId) setSelectedModelId('4');
     setCurrentUser(mockAdmin);
-    setPosts([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Load real R2 assets whenever selected model changes ─────────────────
   const [r2Loading, setR2Loading] = useState(false);
-  // Use a ref to read approvedAssetIds without adding it as a dependency
-  const approvedIdsRef = useRef(approvedAssetIds);
-  approvedIdsRef.current = approvedAssetIds;
 
   useEffect(() => {
     const model = mockModels.find((m) => m.id === selectedModelId);
@@ -1482,9 +1478,6 @@ export default function SchedulePage() {
     const cached = getCachedAssets(model.id);
     if (cached) {
       setGalleryAssets(cached.assets);
-      if (approvedIdsRef.current.length === 0) {
-        setApprovedAssetIds(cached.assets.map((a) => a.id));
-      }
       if (cached.status === 'fresh') return;
     }
 
@@ -1494,23 +1487,26 @@ export default function SchedulePage() {
     fetchAllGalleryAssets(model.s3Folder, (batch) => {
       accumulated.push(...batch);
       setGalleryAssets([...accumulated]);
-      if (approvedIdsRef.current.length === 0) {
-        setApprovedAssetIds(accumulated.map((a) => a.id));
-      }
     }, cached?.etag ?? null)
       .then(({ allAssets, etag }) => {
         if (allAssets.length > 0) {
           setCachedAssets(model.id, allAssets, etag);
           setGalleryAssets(allAssets);
-          if (approvedIdsRef.current.length === 0) {
-            setApprovedAssetIds(allAssets.map((a) => a.id));
-          }
         }
       })
       .catch(() => {})
       .finally(() => setR2Loading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedModelId]);
+
+  // Fallback: if no approved IDs are set but gallery assets exist, approve all of them.
+  // This handles direct navigation to schedule without going through gallery selection.
+  // Skipped when approvedAssetIds is already populated (e.g. set from gallery selection).
+  useEffect(() => {
+    if (approvedAssetIds.length === 0 && galleryAssets.length > 0) {
+      setApprovedAssetIds(galleryAssets.map((a) => a.id));
+    }
+  }, [galleryAssets, approvedAssetIds, setApprovedAssetIds]);
 
   const selectedModel = models.find((m) => m.id === selectedModelId);
 
@@ -1834,6 +1830,29 @@ export default function SchedulePage() {
               {approvedAssets.length} assets
             </span>
           )}
+          {/* Calendar ↔ Feed Preview toggle */}
+          <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+            <button
+              onClick={() => setShowPhonePreview(false)}
+              className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-all"
+              style={!showPhonePreview
+                ? { background: 'rgba(124,58,237,0.8)', color: '#fff' }
+                : { background: 'transparent', color: 'var(--text-muted)' }}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              Calendar
+            </button>
+            <button
+              onClick={() => setShowPhonePreview(true)}
+              className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-all"
+              style={showPhonePreview
+                ? { background: 'rgba(124,58,237,0.8)', color: '#fff' }
+                : { background: 'transparent', color: 'var(--text-muted)' }}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              Feed Preview
+            </button>
+          </div>
           <Link href="/gallery" className="btn-secondary text-xs flex items-center gap-1.5">
             <CalendarDays className="w-3.5 h-3.5" />
             Gallery

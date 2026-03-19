@@ -121,17 +121,36 @@ export async function GET(req: NextRequest) {
         const fileType = fileTypeOf(obj.key)!;
         const parts = obj.key.split('/');
         const fileName = parts[parts.length - 1];
-        const uuid = parts.length >= 3
-          ? parts[parts.length - 2]
-          : createHash('sha1').update(obj.key).digest('hex').slice(0, 16);
+
+        // Detect variants: path contains /_variants/
+        // Variant filenames are: {baseUUID}--v{n}--{originalName}.ext
+        const isVariant = obj.key.includes('/_variants/');
+        let variantOf: string | undefined;
+        let overlayText: string | undefined;
+        let variantLabel: string | undefined;
+        if (isVariant) {
+          // Extract base UUID from filename pattern: {baseUUID}--v{n}--{rest}
+          const match = fileName.match(/^([^-]+(?:-[^-]+)*)--v(\d+)--(.+)$/);
+          if (match) {
+            variantOf = `${safeFolder}-${match[1]}`; // reconstruct scoped ID
+            variantLabel = `v${match[2]}`;
+            // overlayText is embedded after the second "--" separator in the name part
+            // Format: {baseUUID}--v{n}--{overlaySlug}--{ext}
+            // We store it as the slug portion before the extension, decoded
+            const nameWithoutExt = match[3].replace(/\.[^.]+$/, '');
+            overlayText = nameWithoutExt.replace(/_/g, ' ');
+          }
+        }
+
+        const uuid = isVariant
+          ? createHash('sha1').update(obj.key).digest('hex').slice(0, 16)
+          : (parts.length >= 3 ? parts[parts.length - 2] : createHash('sha1').update(obj.key).digest('hex').slice(0, 16));
 
         const fileUrl = presign
           ? await getPresignedUrl(obj.key, 3600)
           : getPublicUrl(obj.key);
 
         return {
-          // Scope id to model folder so assets from different models never share
-          // the same React key — prevents VideoThumbnail state leaking between models
           id: `${safeFolder}-${uuid}`,
           fileName,
           fileUrl,
@@ -140,10 +159,8 @@ export async function GET(req: NextRequest) {
           uploadedAt: obj.lastModified.toISOString(),
           source: 's3' as const,
           s3Key: obj.key,
-          // Use the presigned URL directly as thumbnailUrl — browser fetches straight
-          // from R2/Cloudflare edge with no server hop. The old /api/r2/thumb proxy
-          // streamed the full file through the server (no resizing), which was slower.
           thumbnailUrl: fileType === 'image' ? fileUrl : undefined,
+          ...(variantOf && { variantOf, variantLabel, overlayText }),
         };
       })
     );

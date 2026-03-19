@@ -34,6 +34,8 @@ export interface OverlayItem {
   shadow: boolean;
   align: 'left' | 'center' | 'right';
   fontFamily: string;
+  // Platform-native caption style
+  captionStyle?: 'shadow' | 'outline' | 'card' | 'clean' | 'glow';
 }
 
 export interface EditableImage {
@@ -71,16 +73,67 @@ const CROP_RATIOS: { label: string; value: LocalCropRatio; ratio?: number }[] = 
 ];
 
 const TEXT_COLORS = [
-  '#ffffff', '#000000', '#ff3b30', '#ff9500', '#ffcc00',
-  '#34c759', '#00c7be', '#007aff', '#5856d6', '#ff2d55',
-  '#ff6b35', '#f7c59f', '#efefd0', '#a8d8a8',
+  '#ffffff', '#ffcc00', '#ff3b30', '#ff9500',
+  '#34c759', '#00c7be', '#007aff', '#ff2d55',
+  '#ff6b35', '#5856d6', '#000000', '#f7c59f',
 ];
 
-const FONT_OPTIONS = [
-  { label: 'Helvetica', value: 'Helvetica Neue, sans-serif' },
-  { label: 'Georgia', value: 'Georgia, serif' },
-  { label: 'Courier', value: 'Courier New, monospace' },
-  { label: 'Impact', value: 'Impact, fantasy' },
+// System-UI font is the device's native font (SF Pro on Mac/iOS, Segoe UI on Windows, Roboto on Android)
+const NATIVE_FONT = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif";
+
+// Platform-native caption style presets
+const CAPTION_STYLE_PRESETS = [
+  {
+    id: 'shadow' as const,
+    name: 'Instagram',
+    icon: '📸',
+    description: 'Bold white with strong shadow',
+    fontFamily: NATIVE_FONT,
+    // CSS preview
+    cssTextShadow: '2px 2px 4px rgba(0,0,0,1), 0 0 16px rgba(0,0,0,0.9), 0 0 32px rgba(0,0,0,0.7)',
+    cssWebkitStroke: 'none',
+    cssBg: 'none',
+  },
+  {
+    id: 'outline' as const,
+    name: 'TikTok',
+    icon: '🎵',
+    description: 'Bold with black outline stroke',
+    fontFamily: NATIVE_FONT,
+    cssTextShadow: 'none',
+    cssWebkitStroke: '3px #000',
+    cssBg: 'none',
+  },
+  {
+    id: 'card' as const,
+    name: 'Card',
+    icon: '🃏',
+    description: 'Text on dark background pill',
+    fontFamily: NATIVE_FONT,
+    cssTextShadow: 'none',
+    cssWebkitStroke: 'none',
+    cssBg: 'rgba(0,0,0,0.7)',
+  },
+  {
+    id: 'glow' as const,
+    name: 'Glow',
+    icon: '✨',
+    description: 'Colored glow effect',
+    fontFamily: NATIVE_FONT,
+    cssTextShadow: '0 0 8px currentColor, 0 0 20px currentColor, 0 0 40px currentColor',
+    cssWebkitStroke: 'none',
+    cssBg: 'none',
+  },
+  {
+    id: 'clean' as const,
+    name: 'Clean',
+    icon: '🤍',
+    description: 'No effects, pure text',
+    fontFamily: NATIVE_FONT,
+    cssTextShadow: 'none',
+    cssWebkitStroke: 'none',
+    cssBg: 'none',
+  },
 ];
 
 const EMOJIS: Record<string, string[]> = {
@@ -152,10 +205,9 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
   const [emojiCategory, setEmojiCategory] = useState<string>('🔥 Hot');
   const [textInput, setTextInput] = useState('');
   const [textColor, setTextColor] = useState('#ffffff');
-  const [fontSize, setFontSize] = useState(28);
-  const [fontFamily, setFontFamily] = useState(FONT_OPTIONS[0].value);
+  const [fontSize, setFontSize] = useState(32);
+  const [captionStyleId, setCaptionStyleId] = useState<'shadow' | 'outline' | 'card' | 'clean' | 'glow'>('shadow');
   const [textBold, setTextBold] = useState(true);
-  const [textShadow, setTextShadow] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ clientX: 0, clientY: 0, ox: 0, oy: 0 });
   const [applying, setApplying] = useState(false);
@@ -255,11 +307,15 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
   const addText = () => {
     if (!textInput.trim()) return;
     const id = `ov-${Date.now()}`;
+    const preset = CAPTION_STYLE_PRESETS.find((s) => s.id === captionStyleId)!;
     setOverlays((prev) => [...prev, {
       id, type: 'text', content: textInput.trim(),
-      x: 50, y: 50,
-      fontSize, color: textColor, bold: textBold, shadow: textShadow,
-      align: 'center', fontFamily,
+      x: 50, y: 75,
+      fontSize, color: textColor, bold: textBold,
+      shadow: captionStyleId === 'shadow',
+      align: 'center',
+      fontFamily: preset.fontFamily,
+      captionStyle: captionStyleId,
     }]);
     setSelectedId(id);
     setTextInput('');
@@ -351,27 +407,91 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
         ctx.fillRect(0, 0, sw, sh);
       }
 
-      // Draw overlays
+      // Draw overlays with platform-native styling
       ctx.filter = 'none';
       overlays.forEach((ov) => {
         const x = (ov.x / 100) * sw;
         const y = (ov.y / 100) * sh;
-        const scale = sw / 400; // scale relative to 400px display width
-        const fs = ov.fontSize * scale;
+        // Scale font relative to canvas width (reference: 1080px = typical 1:1 export)
+        const scale = sw / 1080;
+        const fs = Math.max(24, ov.fontSize * scale * 2.7);
+        const style = ov.captionStyle ?? (ov.shadow ? 'shadow' : 'clean');
+        const font = `${ov.bold !== false ? '700 ' : '400 '}${fs}px ${ov.fontFamily || NATIVE_FONT}`;
 
-        ctx.font = `${ov.bold ? 'bold ' : ''}${fs}px ${ov.fontFamily || 'Arial'}`;
+        ctx.font = font;
         ctx.textAlign = ov.align;
-        ctx.fillStyle = ov.color;
+        ctx.textBaseline = 'middle';
 
-        if (ov.shadow) {
-          ctx.shadowColor = 'rgba(0,0,0,0.85)';
-          ctx.shadowBlur = 8 * scale;
-          ctx.shadowOffsetX = 1 * scale;
-          ctx.shadowOffsetY = 1 * scale;
-        }
-        ctx.fillText(ov.content, x, y);
+        // Reset shadow
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+
+        const metrics = ctx.measureText(ov.content);
+        const textW = metrics.width;
+
+        if (style === 'card') {
+          // Draw rounded background card behind text
+          const padX = fs * 0.45;
+          const padY = fs * 0.28;
+          const radius = fs * 0.22;
+          const cardX = (ov.align === 'center' ? x - textW / 2 : ov.align === 'right' ? x - textW : x) - padX;
+          const cardY = y - padY - fs * 0.5;
+          const cardW = textW + padX * 2;
+          const cardH = fs + padY * 2;
+          ctx.fillStyle = 'rgba(0,0,0,0.72)';
+          ctx.beginPath();
+          ctx.roundRect(cardX, cardY, cardW, cardH, radius);
+          ctx.fill();
+          ctx.fillStyle = ov.color;
+          ctx.shadowColor = 'transparent';
+          ctx.fillText(ov.content, x, y);
+
+        } else if (style === 'outline') {
+          // Black stroke outline then fill — the authentic TikTok look
+          const strokeW = fs * 0.09;
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = strokeW * 2;
+          ctx.lineJoin = 'round';
+          ctx.strokeText(ov.content, x, y);
+          ctx.fillStyle = ov.color;
+          ctx.fillText(ov.content, x, y);
+
+        } else if (style === 'shadow') {
+          // Strong multi-layer shadow — Instagram look
+          ctx.shadowColor = 'rgba(0,0,0,0.95)';
+          ctx.shadowBlur = fs * 0.18;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = fs * 0.04;
+          ctx.fillStyle = ov.color;
+          ctx.fillText(ov.content, x, y);
+          // Second pass for extra depth
+          ctx.shadowBlur = fs * 0.35;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+          ctx.fillText(ov.content, x, y);
+
+        } else if (style === 'glow') {
+          // Glow: multiple passes with color shadow
+          ctx.shadowColor = ov.color;
+          ctx.shadowBlur = fs * 0.5;
+          ctx.fillStyle = ov.color;
+          ctx.fillText(ov.content, x, y);
+          ctx.shadowBlur = fs * 1.0;
+          ctx.fillText(ov.content, x, y);
+
+        } else {
+          // clean — just fill
+          ctx.fillStyle = ov.color;
+          ctx.fillText(ov.content, x, y);
+        }
+
+        // Always reset shadow after each overlay
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
       });
 
       const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
@@ -526,31 +646,45 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
           )}
 
           {/* Overlay items (text/emoji) */}
-          {overlays.map((ov) => (
-            <div
-              key={ov.id}
-              onMouseDown={(e) => startDrag(e, ov)}
-              onTouchStart={(e) => startDrag(e, ov)}
-              onClick={(e) => { e.stopPropagation(); setSelectedId(ov.id); }}
-              className={`absolute cursor-move select-none ${selectedId === ov.id ? 'ring-2 ring-blue-400 ring-offset-1 ring-offset-transparent' : ''}`}
-              style={{
-                left: `${ov.x}%`,
-                top: `${ov.y}%`,
-                transform: 'translate(-50%, -50%)',
-                fontSize: `${ov.fontSize}px`,
-                fontFamily: ov.fontFamily,
-                fontWeight: ov.bold ? 'bold' : 'normal',
-                color: ov.color,
-                textShadow: ov.shadow ? '1px 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7)' : 'none',
-                textAlign: ov.align,
-                whiteSpace: 'nowrap',
-                zIndex: 10,
-                lineHeight: 1.2,
-              }}
-            >
-              {ov.content}
-            </div>
-          ))}
+          {overlays.map((ov) => {
+            const capStyle = ov.captionStyle ?? (ov.shadow ? 'shadow' : 'clean');
+            const preset = CAPTION_STYLE_PRESETS.find((s) => s.id === capStyle);
+            const isCard = capStyle === 'card';
+            const textShadowCSS =
+              capStyle === 'shadow' ? '2px 2px 6px rgba(0,0,0,1), 0 0 20px rgba(0,0,0,0.9), 0 0 40px rgba(0,0,0,0.7)' :
+              capStyle === 'glow' ? `0 0 8px ${ov.color}, 0 0 20px ${ov.color}, 0 0 40px ${ov.color}` :
+              'none';
+            const webkitStroke = capStyle === 'outline' ? '3px #000' : undefined;
+            return (
+              <div
+                key={ov.id}
+                onMouseDown={(e) => startDrag(e, ov)}
+                onTouchStart={(e) => startDrag(e, ov)}
+                onClick={(e) => { e.stopPropagation(); setSelectedId(ov.id); }}
+                className={`absolute cursor-move select-none ${selectedId === ov.id ? 'ring-2 ring-blue-400 ring-offset-1 ring-offset-transparent rounded-md' : ''}`}
+                style={{
+                  left: `${ov.x}%`,
+                  top: `${ov.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  fontSize: `${ov.fontSize}px`,
+                  fontFamily: ov.fontFamily || NATIVE_FONT,
+                  fontWeight: ov.bold !== false ? '700' : '400',
+                  color: ov.color,
+                  textShadow: textShadowCSS,
+                  WebkitTextStroke: webkitStroke,
+                  textAlign: ov.align,
+                  whiteSpace: 'nowrap',
+                  zIndex: 10,
+                  lineHeight: 1.2,
+                  padding: isCard ? '0.2em 0.5em' : undefined,
+                  background: isCard ? 'rgba(0,0,0,0.72)' : undefined,
+                  borderRadius: isCard ? '0.22em' : undefined,
+                }}
+              >
+                {ov.content}
+              </div>
+            );
+          })}
 
           {/* Selected overlay controls — floats near bottom of canvas */}
           {selectedOverlay && (
@@ -718,59 +852,90 @@ export default function ImageEditor({ item, initialFilters, initialOverlays, onD
             {/* Text panel */}
             {tool === 'text' && (
               <div className="px-4 py-4 space-y-3">
+                {/* Text input */}
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={textInput}
                     onChange={(e) => setTextInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && addText()}
-                    placeholder="Type your text…"
+                    placeholder="Type your caption…"
                     className="flex-1 bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/40"
+                    style={{ fontFamily: NATIVE_FONT }}
                   />
                   <button
                     onClick={addText}
                     disabled={!textInput.trim()}
-                    className="bg-white text-black px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="bg-white text-black px-4 py-2.5 rounded-xl text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Add
                   </button>
                 </div>
 
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] text-white/40 mr-1">Color</span>
-                  {TEXT_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setTextColor(c)}
-                      className={`w-6 h-6 rounded-full border-2 flex-shrink-0 transition-all ${textColor === c ? 'border-white scale-110' : 'border-transparent hover:scale-110'}`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
+                {/* Caption style presets */}
+                <div>
+                  <p className="text-[10px] text-white/40 mb-2 uppercase tracking-wider">Caption Style</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4">
+                    {CAPTION_STYLE_PRESETS.map((preset) => {
+                      const active = captionStyleId === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          onClick={() => setCaptionStyleId(preset.id)}
+                          className={`flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-xl border transition-all ${
+                            active ? 'border-white bg-white/15' : 'border-white/15 bg-white/5 hover:border-white/30'
+                          }`}
+                        >
+                          {/* Mini preview */}
+                          <div
+                            className="text-[13px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap"
+                            style={{
+                              fontFamily: NATIVE_FONT,
+                              color: '#fff',
+                              background: preset.id === 'card' ? 'rgba(0,0,0,0.7)' : 'transparent',
+                              textShadow:
+                                preset.id === 'shadow' ? '1px 1px 4px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,0.8)' :
+                                preset.id === 'glow' ? '0 0 8px #fff, 0 0 16px #fff' : 'none',
+                              WebkitTextStroke: preset.id === 'outline' ? '1.5px #000' : undefined,
+                            }}
+                          >
+                            Aa
+                          </div>
+                          <span className={`text-[9px] font-medium ${active ? 'text-white' : 'text-white/40'}`}>{preset.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
-                  <select
-                    value={fontFamily}
-                    onChange={(e) => setFontFamily(e.target.value)}
-                    className="bg-white/10 border border-white/20 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none"
-                  >
-                    {FONT_OPTIONS.map((f) => (
-                      <option key={f.value} value={f.value}>{f.label}</option>
+                {/* Color swatches */}
+                <div>
+                  <p className="text-[10px] text-white/40 mb-2 uppercase tracking-wider">Color</p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {TEXT_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setTextColor(c)}
+                        className={`w-7 h-7 rounded-full border-2 flex-shrink-0 transition-all ${textColor === c ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:scale-105'}`}
+                        style={{ backgroundColor: c, boxShadow: c === '#ffffff' ? 'inset 0 0 0 1px rgba(0,0,0,0.2)' : undefined }}
+                      />
                     ))}
-                  </select>
+                  </div>
+                </div>
+
+                {/* Size + bold */}
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] text-white/40 uppercase tracking-wider">Size</p>
                   <div className="flex items-center gap-1 bg-white/10 rounded-lg px-1.5">
-                    <button onClick={() => setFontSize((s) => Math.max(12, s - 4))} className="text-white/70 hover:text-white p-1"><Minus className="w-3 h-3" /></button>
+                    <button onClick={() => setFontSize((s) => Math.max(16, s - 4))} className="text-white/70 hover:text-white p-1"><Minus className="w-3 h-3" /></button>
                     <span className="text-xs text-white font-mono w-6 text-center">{fontSize}</span>
-                    <button onClick={() => setFontSize((s) => Math.min(72, s + 4))} className="text-white/70 hover:text-white p-1"><Plus className="w-3 h-3" /></button>
+                    <button onClick={() => setFontSize((s) => Math.min(96, s + 4))} className="text-white/70 hover:text-white p-1"><Plus className="w-3 h-3" /></button>
                   </div>
                   <button
                     onClick={() => setTextBold((b) => !b)}
                     className={`text-sm px-3 py-1.5 rounded-lg border font-bold transition-all ${textBold ? 'bg-white text-black border-white' : 'bg-white/10 border-white/20 text-white/60'}`}
+                    style={{ fontFamily: NATIVE_FONT }}
                   >B</button>
-                  <button
-                    onClick={() => setTextShadow((s) => !s)}
-                    className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${textShadow ? 'bg-white/20 border-white/40 text-white' : 'bg-white/10 border-white/20 text-white/40'}`}
-                  >Shadow</button>
                 </div>
               </div>
             )}

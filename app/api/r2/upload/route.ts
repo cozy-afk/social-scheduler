@@ -13,11 +13,14 @@ const MAX_FILENAME_LEN = 200;
 
 /**
  * POST /api/r2/upload
- * Body: { modelFolder: string; fileName: string; contentType: string }
+ * Body: { modelFolder: string; fileName: string; contentType: string; subPath?: string }
  *
  * Returns a presigned PUT URL the client can use to upload directly to R2,
  * plus the final object key (so the client can add it to gallery state).
- * Files go to: [MODELS]/{modelFolder}/{uuid}/{fileName}
+ *
+ * Normal assets:  [MODELS]/{modelFolder}/{uuid}/{fileName}
+ * Variants:       [MODELS]/{modelFolder}/_variants/{fileName}
+ *   (subPath="_variants" — no extra uuid layer; fileName encodes the base asset id)
  */
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -32,7 +35,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { modelFolder, fileName, contentType } = body as Record<string, unknown>;
+  const { modelFolder, fileName, contentType, subPath } = body as Record<string, unknown>;
 
   if (typeof modelFolder !== 'string' || !modelFolder) {
     return NextResponse.json({ ok: false, error: 'modelFolder is required' }, { status: 400 });
@@ -56,12 +59,17 @@ export async function POST(req: NextRequest) {
   }
   const safeFileName = fileName.replace(/[^a-zA-Z0-9_\-. ]/g, '_').replace(/\s+/g, '_');
 
-  const uuid = randomUUID();
-  const key = `[MODELS]/${safeFolder}/${uuid}/${safeFileName}`;
+  // Optional sub-path (only "_variants" is accepted to prevent abuse)
+  const allowedSubPaths = new Set(['_variants']);
+  const safeSubPath = typeof subPath === 'string' && allowedSubPaths.has(subPath) ? `/${subPath}` : '';
+
+  const key = safeSubPath
+    ? `[MODELS]/${safeFolder}${safeSubPath}/${safeFileName}`   // variants: flat under _variants/
+    : `[MODELS]/${safeFolder}/${randomUUID()}/${safeFileName}`; // normal: scoped uuid folder
 
   try {
     const uploadUrl = await getPresignedUploadUrl(key, contentType, 900);
-    return NextResponse.json({ ok: true, uploadUrl, key, uuid });
+    return NextResponse.json({ ok: true, uploadUrl, key });
   } catch (err) {
     console.error('[r2/upload]', err);
     return NextResponse.json({ ok: false, error: 'Failed to generate upload URL' }, { status: 500 });

@@ -329,11 +329,11 @@ export const useStore = create<AppState>((set) => ({
     set({
       stagedAssets: assets.map((asset) => ({
         asset,
-        variants: [], // Platform-specific variants (created when scheduling)
-        ratioVariants: DEFAULT_CROP_RATIOS.map((v) => ({ ...v })), // Legacy: kept for backward compatibility
+        variants: [],
+        ratioVariants: DEFAULT_CROP_RATIOS.map((v) => ({ ...v })),
         skipped: false,
       })),
-      workflowStep: 'staging',
+      workflowStep: 'scheduling',
     }),
   updateStagedVariant: (assetId, ratio, result) =>
     set((state) => ({

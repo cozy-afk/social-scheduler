@@ -191,6 +191,7 @@ export interface GalleryAsset {
   viralityScore?: number; // 0-100 score for image viral potential
   variantOf?: string; // ID of original asset if this is a variant
   variantLabel?: string; // Label for the variant (e.g., "with captions")
+  overlayText?: string; // Caption text burned into this variant
 }
 
 // ─── Post References ─────────────────────────────────────────────────────────
