@@ -67,15 +67,15 @@ function drawTextOverlay(
 
   ctx.save();
 
-  // Scale font relative to canvas width for consistent appearance
+  // Scale font relative to canvas width — TikTok uses ~5-7% of frame width
   const scaledFont = Math.round(fontSize * (w / 390));
-  ctx.font = `${bold ? 'bold ' : ''}${scaledFont}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+  ctx.font = `${bold ? '800' : '700'} ${scaledFont}px "Arial Black", "Helvetica Neue", Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // Word-wrap the text
+  // Word-wrap
   const words = text.split(' ');
-  const maxWidth = w * 0.85;
+  const maxWidth = w * 0.82;
   const lines: string[] = [];
   let line = '';
   for (const word of words) {
@@ -89,46 +89,27 @@ function drawTextOverlay(
   }
   if (line) lines.push(line);
 
-  const lineH = scaledFont * 1.3;
+  const lineH = scaledFont * 1.25;
   const blockH = lines.length * lineH;
-  const padding = scaledFont * 0.6;
+  const padding = scaledFont * 0.5;
 
-  // Vertical position
+  // Vertical anchor
   let blockTop: number;
-  if (vPosition === 'top') blockTop = padding;
-  else if (vPosition === 'bottom') blockTop = h - blockH - padding;
+  if (vPosition === 'top') blockTop = padding * 2;
+  else if (vPosition === 'bottom') blockTop = h - blockH - padding * 2;
   else blockTop = (h - blockH) / 2;
 
-  // Semi-transparent background pill per line
+  // TikTok style: thick black stroke + white fill, no background
+  const strokeW = scaledFont * 0.12;
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = strokeW * 2;
+  ctx.strokeStyle = '#000000';
+  ctx.fillStyle = color;
+
   for (let i = 0; i < lines.length; i++) {
     const y = blockTop + i * lineH + lineH / 2;
-    const tw = ctx.measureText(lines[i]).width;
-    const rx = w / 2 - tw / 2 - padding / 2;
-    const ry = y - lineH * 0.5;
-    const rw = tw + padding;
-    const rh = lineH;
-
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    const r = rh * 0.25;
-    ctx.beginPath();
-    ctx.moveTo(rx + r, ry);
-    ctx.lineTo(rx + rw - r, ry);
-    ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + r);
-    ctx.lineTo(rx + rw, ry + rh - r);
-    ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - r, ry + rh);
-    ctx.lineTo(rx + r, ry + rh);
-    ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r);
-    ctx.lineTo(rx, ry + r);
-    ctx.quadraticCurveTo(rx, ry, rx + r, ry);
-    ctx.closePath();
-    ctx.fill();
-
-    // Text shadow
-    ctx.shadowColor = 'rgba(0,0,0,0.7)';
-    ctx.shadowBlur = 4;
-    ctx.fillStyle = color;
+    ctx.strokeText(lines[i], w / 2, y);
     ctx.fillText(lines[i], w / 2, y);
-    ctx.shadowBlur = 0;
   }
 
   ctx.restore();
@@ -254,23 +235,16 @@ async function uploadVariant(
   fileName: string,
   contentType: string,
 ): Promise<{ key: string }> {
-  // Get presigned PUT URL
-  const res = await fetch('/api/r2/upload', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ modelFolder, fileName, contentType, subPath: '_variants' }),
-  });
-  if (!res.ok) throw new Error('Failed to get upload URL');
-  const { uploadUrl, key } = await res.json();
+  // Upload via server-side API route (avoids R2 CORS)
+  const form = new FormData();
+  form.append('file', new File([blob], fileName, { type: contentType }));
+  form.append('modelFolder', modelFolder);
+  form.append('fileName', fileName);
+  form.append('subPath', '_variants');
 
-  // PUT blob directly to R2
-  const putRes = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': contentType },
-    body: blob,
-  });
-  if (!putRes.ok) throw new Error('R2 upload failed');
-
+  const res = await fetch('/api/r2/upload', { method: 'POST', body: form });
+  if (!res.ok) throw new Error('Upload failed');
+  const { key } = await res.json();
   return { key };
 }
 

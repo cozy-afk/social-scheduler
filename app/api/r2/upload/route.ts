@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { getPresignedUploadUrl } from '@/lib/r2';
+import { getPresignedUploadUrl, getR2Client, r2Bucket } from '@/lib/r2';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 
 const ALLOWED_MIME_PREFIXES = ['image/', 'video/'];
@@ -28,6 +29,53 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
+  // ── FormData path: client sends blob directly → we PUT to R2 server-side (no CORS) ──
+  const contentTypeHeader = req.headers.get('content-type') ?? '';
+  if (contentTypeHeader.includes('multipart/form-data')) {
+    const form = await req.formData();
+    const file = form.get('file') as File | null;
+    const modelFolder = form.get('modelFolder') as string | null;
+    const fileName = form.get('fileName') as string | null;
+    const subPath = form.get('subPath') as string | null;
+
+    if (!file || !modelFolder || !fileName) {
+      return NextResponse.json({ ok: false, error: 'Missing file, modelFolder or fileName' }, { status: 400 });
+    }
+
+    const contentType = file.type;
+    if (!ALLOWED_MIME_PREFIXES.some((p) => contentType.startsWith(p))) {
+      return NextResponse.json({ ok: false, error: 'Unsupported content type' }, { status: 400 });
+    }
+    const ext = (fileName.split('.').pop() ?? '').toLowerCase();
+    if (!ALLOWED_EXTS.has(ext)) {
+      return NextResponse.json({ ok: false, error: 'Unsupported file extension' }, { status: 400 });
+    }
+
+    const safeFolder = modelFolder.replace(/[^a-zA-Z0-9_\-]/g, '');
+    const safeFileName = fileName.replace(/[^a-zA-Z0-9_\-. ]/g, '_').replace(/\s+/g, '_');
+    const allowedSubPaths = new Set(['_variants']);
+    const safeSubPath = typeof subPath === 'string' && allowedSubPaths.has(subPath) ? `/${subPath}` : '';
+    const key = safeSubPath
+      ? `[MODELS]/${safeFolder}${safeSubPath}/${safeFileName}`
+      : `[MODELS]/${safeFolder}/${randomUUID()}/${safeFileName}`;
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const client = getR2Client();
+      await client.send(new PutObjectCommand({
+        Bucket: r2Bucket(),
+        Key: key,
+        Body: Buffer.from(arrayBuffer),
+        ContentType: contentType,
+      }));
+      return NextResponse.json({ ok: true, key });
+    } catch (err) {
+      console.error('[r2/upload/formdata]', err);
+      return NextResponse.json({ ok: false, error: 'Upload failed' }, { status: 500 });
+    }
+  }
+
+  // ── JSON path: return presigned URL for client to PUT directly ──
   let body: unknown;
   try {
     body = await req.json();

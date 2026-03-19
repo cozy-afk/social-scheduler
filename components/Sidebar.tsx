@@ -16,7 +16,6 @@ import { prefetchGalleryAssets } from '@/lib/gallery-cache';
 const NAV_ITEMS = [
   { href: '/gallery', icon: LayoutGrid, label: 'Gallery' },
   { href: '/schedule', icon: CalendarCheck, label: 'Schedule' },
-  { href: '/', icon: Calendar, label: 'Calendar' },
   { href: '/captions', icon: FileText, label: 'Captions' },
   { href: '/models', icon: Users, label: 'Models' },
   { href: '/clone-reel', icon: Film, label: 'Reel Creator' },

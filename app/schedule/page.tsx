@@ -1853,10 +1853,6 @@ export default function SchedulePage() {
               Feed Preview
             </button>
           </div>
-          <Link href="/gallery" className="btn-secondary text-xs flex items-center gap-1.5">
-            <CalendarDays className="w-3.5 h-3.5" />
-            Gallery
-          </Link>
         </div>
       </div>
 
@@ -1882,15 +1878,6 @@ export default function SchedulePage() {
             <div className="flex flex-col gap-3 overflow-hidden" style={{ width: 380 }}>
               {/* Platform tabs + hide toggle */}
               <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-                <button
-                  onClick={() => setShowPhonePreview(false)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition-all"
-                  style={{ background: 'rgba(124,58,237,0.25)', border: '1px solid rgba(124,58,237,0.6)', color: '#c4b5fd' }}
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  Back to Planner
-                </button>
-                <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>|</span>
                 {PREVIEW_PLATFORMS.map((p) => {
                   const theme = PLATFORM_THEMES[p];
                   const active = activePlatform === p;
