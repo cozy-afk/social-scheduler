@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useStore, getVisibleModels } from '@/lib/store';
 import { mockModels, mockAdmin, mockPostReferences } from '@/lib/mockData';
 import { AuthGuard } from '@/components/AuthGuard';
 import CreatePostModal from '@/components/CreatePostModal';
 import ImageEditor, { EditableImage, ImageEditorResult } from '@/components/ImageEditor';
-import BatchScheduler from '@/components/BatchScheduler';
 import AutoPublisher from '@/components/AutoPublisher';
 import FeedPreviewPanel from '@/components/FeedPreviewPanel';
 import { GalleryAsset, CropRatio } from '@/types/models';
@@ -359,13 +359,14 @@ function AssetThumbnail({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function GalleryPage() {
+  const router = useRouter();
 
   const {
     selectedModelId, setModels, setSelectedModelId, setCurrentUser,
     galleryAssets, setGalleryAssets, addGalleryAsset,
     setShowCreatePostModal, setPreloadedGalleryAssets, showCreatePostModal,
-    setStagedAssets, workflowStep, editingTarget, setEditingTarget,
-    updateStagedVariant, setWorkflowStep, stagedAssets, posts, setPostReferences,
+    editingTarget, setEditingTarget,
+    posts, setPostReferences,
     setApprovedAssetIds,
   } = useStore();
   const models = useStore(getVisibleModels); // Filtered by user role/agency
@@ -658,8 +659,8 @@ export default function GalleryPage() {
   const handleStageSelected = () => {
     const selected = galleryAssets.filter((a) => selectedIds.has(a.id));
     setApprovedAssetIds(selected.map((a) => a.id));
-    setStagedAssets(selected); // sets workflowStep → 'scheduling', BatchScheduler renders as overlay
     clearSelection();
+    router.push('/schedule');
   };
 
   const toggleApprove = (e: React.MouseEvent, id: string) => {
@@ -670,14 +671,10 @@ export default function GalleryPage() {
   const handleScheduleApproved = () => {
     const approved = galleryAssets.filter((a) => approvedIds.has(a.id));
     if (approved.length === 0) return;
-    setApprovedAssetIds(approved.map((a) => a.id)); // keep approved IDs alive for schedule page
-    setStagedAssets(approved); // opens BatchScheduler overlay
+    setApprovedAssetIds(approved.map((a) => a.id));
+    router.push('/schedule');
   };
 
-  const handleEditVariant = useCallback((assetId: string, ratio: CropRatio) => {
-    setEditingTarget({ assetId, ratio });
-    setWorkflowStep('editing');
-  }, [setEditingTarget, setWorkflowStep]);
 
   // Virality analysis
   const analyzeVirality = useCallback(async (asset: GalleryAsset) => {
@@ -753,49 +750,6 @@ export default function GalleryPage() {
     return variant;
   }, [addGalleryAsset, analyzeVirality]);
 
-  const handleEditorDone = useCallback(async (result: ImageEditorResult) => {
-    if (!editingTarget) return;
-
-    // Find the original asset
-    const originalAsset = galleryAssets.find((a) => a.id === editingTarget.assetId);
-    if (!originalAsset) {
-      updateStagedVariant(editingTarget.assetId, editingTarget.ratio, {
-        url: result.url,
-        namedFilter: result.filters.namedFilter,
-        filters: result.filters as unknown as Record<string, number>,
-        overlays: result.overlays,
-      });
-      setEditingTarget(null);
-      setWorkflowStep('staging');
-      return;
-    }
-
-    // Only create a variant if actual edits were made (compare against defaults)
-    const f = result.filters;
-    const isDefaultFilters = f.brightness === 100 && f.contrast === 100 && f.saturation === 100 &&
-      f.warmth === 0 && f.vignette === 0 && f.fade === 0 && f.sharpen === 0 && !f.namedFilter;
-    const hasEdits = !isDefaultFilters || (result.overlays && result.overlays.length > 0);
-
-    if (hasEdits) {
-      // Create a new variant with the edited version
-      await createEditedVariant(originalAsset, result.url, 'edited');
-    }
-
-    // Update the staged variant with the edited URL
-    updateStagedVariant(editingTarget.assetId, editingTarget.ratio, {
-      url: result.url,
-      namedFilter: result.filters.namedFilter,
-      filters: result.filters as unknown as Record<string, number>,
-      overlays: result.overlays,
-    });
-    setEditingTarget(null);
-    setWorkflowStep('staging');
-  }, [editingTarget, updateStagedVariant, setEditingTarget, setWorkflowStep, galleryAssets, createEditedVariant]);
-
-  const handleEditorCancel = useCallback(() => {
-    setEditingTarget(null);
-    setWorkflowStep('staging');
-  }, [setEditingTarget, setWorkflowStep]);
 
   // Direct edit from gallery (no staging required)
   const handleGalleryEditorDone = useCallback(async (result: ImageEditorResult) => {
@@ -1530,39 +1484,6 @@ export default function GalleryPage() {
 
       {showCreatePostModal && <CreatePostModal />}
 
-      {/* ── Workflow overlays ── */}
-      {workflowStep === 'scheduling' && (
-        <div className="fixed inset-0 z-[60]" style={{ background: 'var(--bg-app)' }}>
-          <BatchScheduler />
-        </div>
-      )}
-
-      {workflowStep === 'editing' && editingTarget && (() => {
-        const sa = stagedAssets.find((s) => s.asset.id === editingTarget.assetId);
-        if (!sa) return null;
-        // Use editResult url if available (already a data URL, no CORS), otherwise proxy
-        const rawUrl = sa.editResult?.url || sa.asset.fileUrl;
-        const isDataUrl = rawUrl.startsWith('data:');
-        const url = isDataUrl
-          ? rawUrl
-          : sa.asset.s3Key
-          ? `/api/r2/proxy?key=${encodeURIComponent(sa.asset.s3Key)}`
-          : rawUrl;
-        const item: EditableImage = {
-          id: sa.asset.id,
-          url,
-          name: sa.asset.fileName,
-          type: sa.asset.fileType,
-        };
-        return (
-          <ImageEditor
-            item={item}
-            lockedRatio={editingTarget.ratio}
-            onDone={handleEditorDone}
-            onCancel={handleEditorCancel}
-          />
-        );
-      })()}
 
       {/* Direct-from-gallery editor */}
       {galleryEditingAsset && (
@@ -1600,8 +1521,8 @@ export default function GalleryPage() {
               <button
                 onClick={() => {
                   setApprovedAssetIds([postEditVariant.id]);
-                  setStagedAssets([postEditVariant]); // opens BatchScheduler overlay
                   setPostEditVariant(null);
+                  router.push('/schedule');
                 }}
                 className="w-full btn-secondary flex items-center justify-center gap-2 py-3"
               >
